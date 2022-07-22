@@ -364,6 +364,7 @@ umount ${LOOPDEV}p1
 umount ${LOOPDEV}p2
 rm -d $CPWD/mnt/boot
 rm -d $CPWD/mnt/root
+rm -d $CPWD/mnt
 run losetup -d ${LOOPDEV}
 
 pg "DONE"
