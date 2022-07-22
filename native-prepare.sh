@@ -201,7 +201,7 @@ echo "ExecStart=" >> /etc/systemd/system/systemd-networkd-wait-online.service.d/
 echo "ExecStart=/lib/systemd/systemd-networkd-wait-online --any" >> /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
 py "OK"
 
-# Create the necessary links and cache to the most recent shared libraries
+pnn "- Refresh SO libraries : "
 run ldconfig
 py "DONE"
 
