@@ -146,6 +146,7 @@ run cp -f $CPWD/native-prepare/user-data /boot/firmware
 py "OK"
 
 pnn "- Update APT : "
+run apt -y remove needrestart
 run apt-get update
 run apt-get -y dist-upgrade
 run apt remove -y unattended-upgrades
