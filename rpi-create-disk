@@ -77,7 +77,6 @@ ARGV=("$@")
 
 VERBOSE=false
 HELP=false
-BUILD_FFMPEG=false
 OUTPUT=$BUILD_OUTPUT_DIR/rpi_image_${BUILD_VERSION}_${BUILD_DATE}.img
 PRODUCTION=false
 INTERACTIVE=false
@@ -105,8 +104,6 @@ while [ $COUNT -lt $ARGC ]; do
 		HELP=true
 	elif [ "x$STRIP" == "x-p" ]; then
 		PRODUCTION=true
-	elif [ "x$STRIP" == "x-b" ]; then
-		BUILD_FFMPEG=true
 	elif [ "x$STRIP" == "x-i" ]; then
 		INTERACTIVE=true
 	elif [ "x$STRIP" == "x-o" ]; then
@@ -141,7 +138,6 @@ if [ "$HELP" == "true" ]; then
 	pn "-v (--verbose)     Verbose output for operations"
 	pn "-o (--output)      Output image path"
 	pn "-p (--production)  Production ready image"
-	pn "-b (--build-ffmpeg Build FFMPEG from source"
 	pn "-i (--interactive) Provide interactive terminal during creation"
 	pn "-h (--help)        Print this"
 	pl
@@ -313,7 +309,6 @@ echo "GEN_VERSION=$BUILD_VERSION" >> $CPWD/mnt/root/home/rpi/native-input
 echo "GEN_DATE=$BUILD_DATE" >> $CPWD/mnt/root/home/rpi/native-input
 echo "GEN_INTERACTIVE=$INTERACTIVE" >> $CPWD/mnt/root/home/rpi/native-input
 echo "GEN_VERBOSE=$VERBOSE" >> $CPWD/mnt/root/home/rpi/native-input
-echo "GEN_BUILD_FFMPEG=$BUILD_FFMPEG" >> $CPWD/mnt/root/home/rpi/native-input
 
 pg "DONE"
 
