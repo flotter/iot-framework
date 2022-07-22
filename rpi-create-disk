@@ -128,7 +128,7 @@ COUNT=$((COUNT+1))
 done
 
 pl
-pg "ePlayer Image Generation Tool $BUILD_VERSION"
+pg "RPI Image Generation Tool $BUILD_VERSION"
 pl
 
 if [ "$HELP" == "true" ]; then
