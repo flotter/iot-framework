@@ -1,0 +1,43 @@
+#!/bin/bash
+
+if [ "x$1" == "xled0" ] || [ "x$1" == "xled1" ]; then
+	echo "Selected LED: $1"
+	LED=$1
+else
+	echo "Error, invalid led (LED: $1)"
+	exit 1
+fi
+
+
+if [ "x$2" == "xflash" ] || [ "x$2" == "xon" ] || [ "x$2" == "xoff" ]; then
+	echo "Selected MODE: $2"
+	MODE=$2
+else
+	echo "Error, invalid mode (MODE: $2)"
+	exit 1
+fi
+
+if [ $MODE == "flash" ]; then
+	if [ "x$3" == "x" ]; then
+		echo "Error, invalid freq"
+		exit 1
+	else
+		HZ=$3
+	fi
+
+	# APPLY FLASH
+	echo timer > /sys/class/leds/$LED/trigger
+	echo 1 > /sys/class/leds/$LED/brightness
+	echo $((500 / $HZ)) > /sys/class/leds/$LED/delay_on
+	echo $((500 / $HZ)) > /sys/class/leds/$LED/delay_off
+else
+	# APPLY ON/OFF
+	echo none > /sys/class/leds/$LED/trigger
+	if [ $MODE == "on" ]; then
+		echo 1 > /sys/class/leds/$LED/brightness
+	else
+		echo 0 > /sys/class/leds/$LED/brightness
+	fi
+fi
+
+

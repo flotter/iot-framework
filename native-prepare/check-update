@@ -1,0 +1,187 @@
+#!/bin/bash
+
+
+SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
+LAST_REBOOT_FILE=/home/eplayer/.last-reboot
+
+UPDATE_START=$(cat /run/settings/.update | grep update-time-start | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$UPDATE_START" == "x" ]; then
+	UPDATE_START="02:00"
+fi
+
+UPDATE_END=$(cat /run/settings/.update | grep update-time-end | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$UPDATE_END" == "x" ]; then
+	UPDATE_END="06:00"
+fi
+
+UPDATE_SKIP_DAYS=$(cat /run/settings/.update | grep update-time-skip-days | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$UPDATE_SKIP_DAYS" == "x" ]; then
+	UPDATE_SKIP_DAYS=0
+fi
+
+LIVE_CHECK=$(cat /run/settings/.update | grep update-live | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$LIVE_CHECK" == "x" ]; then
+	LIVE_CHECK=no
+fi
+
+HEARTBEAT_RATE=$(cat /run/settings/.update | grep heartbeat-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$HEARTBEAT_RATE" == "x" ]; then
+	HEARTBEAT_RATE=300
+fi
+
+LAST_REBOOT=$(date +%s)
+LAST_HEARTBEAT=$LAST_REBOOT
+
+REBOOT_FILE=.reboots
+REBOOT_DIR=/home/eplayer/music-player-stats
+
+STAT_SOURCE=eplayer-stats.csv
+
+mkdir -p $REBOOT_DIR
+touch $REBOOT_DIR/$REBOOT_FILE
+
+# RED LED (Player has now started)
+/bin/led-control led1 flash 1
+
+
+while [ true ]; do
+
+	KEYFILE=/run/keyfile
+	BOOT_DIR=/boot/firmware/eplayer
+
+	echo "Crypt-Commission: Key generation"
+	/bin/epkey
+
+	# Make commissioning data available under /run
+	if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then
+		rm -rf /run/commission
+		cat $BOOT_DIR/commission.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d -k "$(cat $KEYFILE)" | tar xz -C /run
+	fi
+
+	UPDATE_TIME_START=$(date --date="$UPDATE_START" +%s)
+	UPDATE_TIME_END=$(date --date="$UPDATE_END" +%s)
+	NOW_TIME_MINUTE=$(date +%s)
+
+	echo "Settings (Update-start: $UPDATE_START, Update-end: $UPDATE_END, Live: $LIVE_CHECK)"
+
+	UPDATE_CHECK_GO=0
+	UPDATE_FORCE_FIRST=0
+	SKIP_DAYS=$((($NOW_TIME_MINUTE - $LAST_REBOOT) / 86400))
+
+	echo "Skip days (Skip days now: $SKIP_DAYS, Skip days setting: $UPDATE_SKIP_DAYS)"
+
+	if [ $UPDATE_TIME_START -lt $NOW_TIME_MINUTE ] && [ $UPDATE_TIME_END -gt $NOW_TIME_MINUTE ] && [ $SKIP_DAYS -ge $UPDATE_SKIP_DAYS ]; then
+		echo "We are inside the update slot..."
+		UPDATE_CHECK_GO=1
+	fi
+
+	if [ $UPDATE_TIME_START -gt $LAST_REBOOT ] || [ $UPDATE_TIME_END -lt $LAST_REBOOT ]; then
+		echo "The last reboot was outside the next update slot..."
+		UPDATE_FORCE_FIRST=1
+	fi
+
+	if [ "x$UPDATE_CHECK_GO" == "x1" ] || [ "x$LIVE_CHECK" == "xyes" ]; then
+
+
+		# GREEN LED
+		/bin/led-control led0 flash 10
+
+		OLD=$(/bin/offline-version)
+		NEW=$(/bin/online-version)
+		if [ "x$OLD" != "x$NEW" ]; then
+			echo "NEW update available (Old: $OLD, New: $NEW)"
+			sync
+			reboot
+		else
+			echo "NO update available (Old: $OLD, New: $NEW)"
+
+			# Stats update on first opportunity in update slot
+			if [ "x$UPDATE_CHECK_GO" == "x1" ] && [ "x$UPDATE_FORCE_FIRST" == "x1" ]; then
+				echo "We reboot only to update stats (no update available)"
+				sync
+				reboot
+			fi
+		fi
+
+	else
+		echo "Not time yet to check for update (Now: $NOW_TIME_MINUTE, Update-start: $UPDATE_TIME_START, Update-end: $UPDATE_TIME_END)"
+	fi
+
+	# Update Green LED state
+	wget -q --spider http://google.com
+	RET=$?
+	if [ $RET -eq 0 ]; then
+		# GREEN LED FLASH 1HZ
+		/bin/led-control led0 flash 1
+	else
+		# GREEN LED OFF
+		/bin/led-control led0 off
+	fi
+
+
+	BEAT_DELTA=$((NOW_TIME_MINUTE - LAST_HEARTBEAT))
+	if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT -eq $LAST_REBOOT ]; then
+
+		# Delay after reboot so we capture actual state
+		if [ $LAST_HEARTBEAT -eq $LAST_REBOOT ]; then
+			echo "Sleeping 60 seconds after reboot before updating heartbeat..."
+			sleep 60
+		fi
+		
+		LAST_HEARTBEAT=$(date +%s)
+
+		echo "Space:"
+		df -h			
+
+		echo "Power State: $(vcgencmd get_throttled | cut -d'=' -f2)"
+	
+		echo "Wifi Hotspots:"
+		iwlist wlan0 scan
+		
+		echo "Network State:"
+		ip a
+		
+		echo "Wifi Connection State:"
+		iwconfig wlan0
+
+		echo "Updating heartbeat ..."
+
+		ONLINE=0		
+		wget -q --spider http://google.com
+		RET=$?
+		if [ $RET -eq 0 ]; then
+			ONLINE=1
+		fi
+		
+		if [ $ONLINE -eq 1 ] && [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/.cust ] && [ -f /run/commission/.site ]; then
+			T="$(date)"
+			L=$(/bin/offline-version)
+			O=$(/bin/online-version)
+			echo "TIMESTAMP: $T" > /run/.heartbeat
+			echo "ONLINE VERSION: $O" >> /run/.heartbeat
+			echo "LOCAL VERSION: $L" >> /run/.heartbeat
+			echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
+			echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
+			echo "FW: $(cat /home/eplayer/.firmware_version)" >> /run/.heartbeat
+
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-heartbeat.txt
+			
+			journalctl -u ep -a -n 50 > /run/.heartbeat
+
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-ep.txt
+			
+			cat $REBOOT_DIR/$STAT_SOURCE | tail -n10 > /run/.heartbeat
+
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-player.txt
+		fi		
+	else
+		echo "Not ready to update heartbeat (Delta: $BEAT_DELTA, Rate: $HEARTBEAT_RATE)"
+	fi
+
+	# Cleanup
+	rm -rf /run/commission
+	rm -rf $KEYFILE
+	
+	sleep 300
+done
+

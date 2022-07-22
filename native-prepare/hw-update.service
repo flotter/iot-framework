@@ -1,0 +1,15 @@
+[Unit]
+Description="HW Checker"
+After=ep-update.service
+Wants=ep-update.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/player-hw-test
+Restart=always
+RestartSec=5
+StandardOutput=journal
+
+[Install]
+WantedBy=default.target

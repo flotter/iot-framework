@@ -1,0 +1,17 @@
+#!/bin/bash
+
+ONLINE=0
+
+wget -q --spider http://google.com
+RET=$?
+if [ $RET -eq 0 ]; then
+	ONLINE=1
+fi
+	
+cat /run/settings/.version > /run/.version 
+
+if [ $ONLINE -eq 1 ] && [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/.cust ] && [ -f /run/commission/.site ]; then
+	s3cmd -q -f --config /run/commission/.s3cfg-music get --no-preserve s3://ep-settings/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/settings/.version /run/.version
+fi
+
+cat /run/.version

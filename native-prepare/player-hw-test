@@ -1,0 +1,33 @@
+#!/bin/bash
+
+KBD_OLD=
+SND_OLD=
+
+while [ true ]; do
+
+	KBD=$(ls /dev/input/by-path/*kbd* 2> /dev/null | head -n1)
+	SND=$(ls /dev/snd/by-path/*usb* 2> /dev/null | head -n1)
+	TIM=$(date)
+
+	# Detect a change
+	if [ "x$KBD" != "x$KBD_OLD" ] || [ "x$SND" != "x$SND_OLD" ]; then
+		echo "Time: $TIM"
+		echo "Sound: $SND"
+		echo "Keypad: $KBD"
+
+		# Apply the change
+		if [ "x$KBD" == "x" ] || [ "x$SND" == "x" ]; then
+			echo "Stopping player due to missing keypad or sound card"
+			systemctl stop ep
+		else
+			echo "Starting player due to keypad and sound card now present"
+			sleep 5
+			systemctl start ep
+		fi
+	fi
+
+	KBD_OLD=$KBD
+	SND_OLD=$SND
+
+	sleep 5
+done

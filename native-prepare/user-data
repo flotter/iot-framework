@@ -1,0 +1,47 @@
+#cloud-config
+
+# The networking setup is a bit of a hack, because the cloud-init network
+# configuration doesn't support WiFi, see
+# https://cloudinit.readthedocs.io/en/latest/topics/network-config-format-v2.html.
+
+hostname: HOSTNAMEXXX
+locale: C.UTF-8
+timezone: "Africa/Johannesburg"
+
+users:
+  - name: root
+    lock_passwd: false
+    shell: /bin/bash
+    passwd: $6$Yk.pehP7w9rM$NPyopOHLrHTXHqyGQDiTdlvTgl8hGsogCXMos8e7OXcMfpLmzJSU4rzox7cSEAZwLhMdoWPQd2PHDqaXWNKQC.
+  - name: rpi
+    gecos: rpi
+    groups: [adm, docker, netdev, plugdev, sudo, users]
+    sudo: ["ALL=NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/ls, /bin/cat"]
+    lock_passwd: false
+    shell: /bin/bash
+    passwd: $6$Yk.pehP7w9rM$NPyopOHLrHTXHqyGQDiTdlvTgl8hGsogCXMos8e7OXcMfpLmzJSU4rzox7cSEAZwLhMdoWPQd2PHDqaXWNKQC.
+
+# Enable password authentication with the SSH daemon
+ssh_pwauth: true
+
+write_files:
+  - content: |
+        network:
+          version: 2
+          ethernets:
+            eth0:
+              dhcp4: true
+              nameservers:
+                addresses: [8.8.8.8, 8.8.4.4]
+              optional: true
+    path: /etc/netplan/config.yaml
+
+runcmd:
+  - 'systemctl daemon-reload'
+  - 'dpkg --configure -a'
+  - 'iw reg set ZA'
+  - 'echo REGDOMAIN=ZA > /etc/default/crda'
+  - 'rm -f /etc/netplan/??-cloud-init.yaml'
+  - 'chmod go-r /etc/netplan/config.yaml'
+  - 'netplan apply'
+

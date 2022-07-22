@@ -1,0 +1,441 @@
+#!/bin/bash
+
+KEYFILE=/run/keyfile
+BOOT_DIR=/boot/firmware/eplayer
+CPWD=$(pwd)
+SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
+
+STAT_SOURCE=eplayer-stats.csv
+STAT_FILE=$SERIAL-player-stats.csv
+STAT_DIR=/home/eplayer/music-player-stats
+STAT_MAX_SIZE=50
+
+# Make sure stats file exist
+mkdir -p $STAT_DIR
+touch $STAT_DIR/$STAT_SOURCE
+
+# Max stats size
+STAT_SIZE=$(cat /run/settings/.update | grep player-stats-max-size | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$STAT_SIZE" != "x" ] && [ $STAT_SIZE -lt $STAT_MAX_SIZE ]; then
+	       STAT_MAX_SIZE=$STAT_SIZE
+fi
+
+# Truncate file to max size if too big
+STAT_CUR_SIZE=$(du -B1M $STAT_DIR/$STAT_SOURCE | cut -d$'\t' -f 1)
+if [ $STAT_CUR_SIZE -gt $STAT_MAX_SIZE ]; then
+	DELETE=$(($(cat $STAT_DIR/$STAT_SOURCE | wc -l) * ( $STAT_CUR_SIZE - $STAT_MAX_SIZE ) / $STAT_CUR_SIZE))
+	sed -i "1,$DELETE d" $STAT_DIR/$STAT_SOURCE
+fi
+
+REBOOT_FILE=.reboots
+REBOOT_DIR=/home/eplayer/music-player-stats
+
+# Update reboot count
+mkdir -p $REBOOT_DIR
+touch $REBOOT_DIR/$REBOOT_FILE
+echo "$(($(cat $REBOOT_DIR/$REBOOT_FILE) + 1))" > $REBOOT_DIR/$REBOOT_FILE
+
+echo "Crypt-Commission: Key generation"
+/bin/epkey
+
+# Make commissioning data available under /run
+if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then
+	rm -rf /run/commission
+	cat $BOOT_DIR/commission.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d -k "$(cat $KEYFILE)" | tar xz -C /run
+fi
+
+# Flash green during boot
+/bin/led-control led0 flash 10
+
+# Wait for cloud init
+
+while [ true ]; do
+
+       STATUS=$(cloud-init status | cut -d ' ' -f 2)
+       if [ "x$STATUS" == "xdone" ]; then
+               echo "Cloud Init Complete - Update Next"
+               break
+       else
+               echo "Cloud Init Busy - Waiting before update ..."
+       fi
+
+       sleep 5
+done
+
+# Wait up to 5mins
+WAIT_MAX=300
+
+START=$(date +%s)
+WAIT=0
+ONLINE=0
+
+while [ $WAIT -lt $WAIT_MAX ]; do
+
+	wget -q --spider http://google.com
+	RET=$?
+	if [ $RET -eq 0 ]; then
+    		echo "Online - Attempting Update"
+		ONLINE=1
+		break
+	else
+    		echo "Offline"
+	fi
+
+	sleep 1
+	NOW=$(date +%s)
+	WAIT=$((NOW - START))
+done
+
+if [ $ONLINE -eq 0 ]; then
+	echo "Offline - Skipping Update"
+else
+
+        # Ensure time is good
+	ntpdate -v ntp.ubuntu.com
+
+	if [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/.cust ] && [ -f /run/commission/.site ]; then
+
+		# Update Start
+		TS="$(date)"
+		L=$(/bin/offline-version)
+		O=$(/bin/online-version)
+		echo "UPDATE STARTED: $TS" > /run/.heartbeat
+		echo "UPDATE ENDED: Busy" > /run/.heartbeat
+		echo "ONLINE VERSION: $O" >> /run/.heartbeat
+		echo "LOCAL VERSION: $L" >> /run/.heartbeat
+		echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
+		echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
+
+		s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+		
+		# We only dump logs if enabled
+		DEBUG_LOGS=$(cat /run/settings/.update | grep debug-logs | sed -n 's/[^=]*=\(.*\)/\1/p')
+	
+		if [ "x$DEBUG_LOGS" == "xyes" ]; then
+			
+			# Capture syslog / minimal logs
+			BOOT_PATH=/home/eplayer/debug/$SERIAL-boot
+			mkdir -p $BOOT_PATH
+			cp -f /run/initramfs/fsck.log $BOOT_PATH/fsck.txt
+			cp -f /var/log/syslog $BOOT_PATH/syslog.txt
+			cp -f /var/log/dmesg  $BOOT_PATH/dmesg.txt
+			cd /home/eplayer/debug
+			tar -czf $SERIAL-boot.tar.gz $SERIAL-boot
+			cd $CPWD
+
+			RETRY=0
+			RETRY_MAX=10
+	
+			while [ $RETRY -lt $RETRY_MAX ]; do
+	
+				RETRY=$((RETRY + 1))
+				echo "TRY NUMBER: $RETRY"
+	
+				echo "Updating Boot Logs"
+				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $BOOT_PATH.tar.gz s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-boot.tar.gz
+				RET=$?
+		
+				if [ $RET -ne 0 ]; then
+					echo "Update attempt returned (Ret: $RET)"
+				else
+					break
+				fi
+			done	
+			
+			# Delete temporary files
+			rm -rf /home/eplayer/debug
+	
+			# Capture logs
+			DEBUG_PATH=/home/eplayer/debug/$SERIAL-debug
+			mkdir -p $DEBUG_PATH
+			journalctl -k --since "7 days ago" > $DEBUG_PATH/kernel.txt
+			journalctl -u ep --since "7 days ago" > $DEBUG_PATH/ep.txt
+			journalctl -u cryptkey --since "7 days ago" > $DEBUG_PATH/cryptkey.txt
+			journalctl -u check-update --since "7 days ago" > $DEBUG_PATH/check.txt
+			journalctl -u ep-update --since "7 days ago" > $DEBUG_PATH/update.txt
+			journalctl -u hw-update --since "7 days ago" > $DEBUG_PATH/hw-test.txt
+			journalctl -u netplan-wpa-wlan0 --since "7 days ago" > $DEBUG_PATH/netplan-wifi.txt
+			journalctl -u systemd-networkd --since "7 days ago" > $DEBUG_PATH/systemd-networkd.txt
+			cp -f /etc/netplan/config.yaml $DEBUG_PATH/network-config.yaml
+			journalctl -a --since "7 days ago" > $DEBUG_PATH/all.txt
+			cd /home/eplayer/debug
+			tar -czf $SERIAL-debug.tar.gz $SERIAL-debug
+			cd $CPWD
+
+			RETRY=0
+			RETRY_MAX=10
+	
+			while [ $RETRY -lt $RETRY_MAX ]; do
+	
+				RETRY=$((RETRY + 1))
+				echo "TRY NUMBER: $RETRY"
+	
+				echo "Updating Debug Logs"
+				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $DEBUG_PATH.tar.gz s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-debug.tar.gz
+				RET=$?
+		
+				if [ $RET -ne 0 ]; then
+					echo "Update attempt returned (Ret: $RET)"
+				else
+					break
+				fi
+			done	
+			
+			# Delete temporary files
+			rm -rf /home/eplayer/debug
+		fi
+
+
+		RETRY=0
+		RETRY_MAX=10
+		mkdir -p /home/eplayer/enc_drive/live
+		mkdir -p /home/eplayer/enc_drive/update
+
+		while [ $RETRY -lt $RETRY_MAX ]; do
+
+			RETRY=$((RETRY + 1))
+			echo "TRY NUMBER: $RETRY"
+
+			echo "Updating Stats"
+			s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $STAT_DIR/$STAT_SOURCE s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$STAT_FILE
+			RET=$?
+
+			if [ $RET -ne 0 ]; then
+				echo "Update attempt returned (Ret: $RET)"
+				continue
+			fi
+
+			echo "Updating Music"
+			s3cmd -v --config /run/commission/.s3cfg-music --no-check-md5 sync --no-preserve --delete-removed s3://ep-music/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/playlists /home/eplayer/enc_drive/update/
+			RET=$?
+			if [ $RET -ne 0 ]; then
+				echo "Update attempt returned (Ret: $RET)"
+				continue
+			fi
+
+			# Delete empty directories if files were removed
+			find /home/eplayer/enc_drive/update/playlists -type d -empty -delete
+
+			L=$(/bin/offline-version)
+			O=$(/bin/online-version)
+			
+			echo "OLD VERSION: $L"
+			echo "NEW VERSION: $O"
+	
+			if [ "x$L" != "x$O" ]; then
+
+				echo "Update -> Live"
+
+
+				# Normalizing
+				NORM_ON=$(cat /run/settings/.update | grep player-normalize-on | sed -n 's/[^=]*=\(.*\)/\1/p')
+				NORM_TARGET=$(cat /run/settings/.update | grep normalization-target | sed -n 's/[^=]*=\(.*\)/\1/p')
+				NORM_TYPE=$(cat /run/settings/.update | grep normalization-type | sed -n 's/[^=]*=\(.*\)/\1/p')
+				if [ "x$NORM_ON" == "xyes" ]; then
+				
+					L=$(/bin/offline-version)
+					O=$(/bin/online-version)
+					echo "UPDATE STARTED: $TS" > /run/.heartbeat
+					echo "UPDATE ENDED: Normalizing" > /run/.heartbeat
+					echo "ONLINE VERSION: $O" >> /run/.heartbeat
+					echo "LOCAL VERSION: $L" >> /run/.heartbeat
+					echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
+					echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
+	
+					s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+					OIFS="$IFS"
+					IFS=$'\n'
+	
+					# Add missing update songs in live
+					pushd /home/eplayer/enc_drive/update
+					LIVE_SONGS=($(find . -type f))
+					popd
+	
+					COUNT_MAX=${#LIVE_SONGS[@]}
+					COUNT=0
+		
+					while [ $COUNT -lt $COUNT_MAX ]; do
+						IF=${LIVE_SONGS[$COUNT]}
+						OF=$(echo "${LIVE_SONGS[$COUNT]}").norm.mp4
+	
+						if [ ! -f "/home/eplayer/enc_drive/live/$OF" ]; then
+							echo "Live: new created /home/eplayer/enc_drive/live/$IF"
+							mkdir -p "$(dirname "/home/eplayer/enc_drive/live/$IF")"
+							cp -f "/home/eplayer/enc_drive/update/$IF" "/home/eplayer/enc_drive/live/$IF"
+						fi
+	
+						COUNT=$((COUNT + 1))
+					done
+					
+					# Remove old songs from live
+					pushd /home/eplayer/enc_drive/live
+					LIVE_SONGS=($(find . -type f | grep '.norm.mp4' | sed 's/.norm.mp4//g'))
+					popd
+	
+					COUNT_MAX=${#LIVE_SONGS[@]}
+					COUNT=0
+		
+					while [ $COUNT -lt $COUNT_MAX ]; do
+						IF=${LIVE_SONGS[$COUNT]}
+						OF=${LIVE_SONGS[$COUNT]}.norm.mp4
+	
+						if [ ! -f "/home/eplayer/enc_drive/update/$IF" ]; then
+							echo "Live: deleted /home/eplayer/enc_drive/live/$OF"
+							rm -f "/home/eplayer/enc_drive/live/$OF"
+						fi
+	
+						COUNT=$((COUNT + 1))
+					done
+	
+	
+					# Delete empty directories if files were removed
+					find /home/eplayer/enc_drive/live/playlists -type d -empty -delete
+
+
+					echo "Normalizing"
+
+					if [ "x$NORM_TYPE" != "xebu" ] && [ "x$NORM_TYPE" != "xrms" ] && [ "x$NORM_TYPE" != "xpeak" ]; then
+						echo "Fixing invalid norm type...($NORM_TYPE -> ebu)"
+						NORM_TYPE=ebu
+					fi
+					
+					echo "Normalize type: $NORM_TYPE "
+
+					if [ "x$NORM_TYPE" == "xebu" ]; then
+						TARGET_MAX=-5.0
+					else
+						TARGET_MAX=0.0
+					fi
+					
+					if [ "x$NORM_TARGET" == "x" ] || [ $(echo "$NORM_TARGET < -25" | bc) -eq 1 ] || [ $(echo "$NORM_TARGET > $TARGET_MAX" | bc) -eq 1 ]; then
+						echo "Fixing invalid norm target...($NORM_TARGET -> -10)"
+						NORM_TARGET=-10
+					fi
+					
+					echo "Normalize target: $NORM_TARGET dB"
+					
+					T="/tmp/encpids"
+					rm -rf $T
+					mkdir -p $T
+	
+					ALL=($(find /home/eplayer/enc_drive/live -type f | grep -v '.norm.mp4'))
+					COUNT_MAX=${#ALL[@]}
+					COUNT=0
+		
+					NORM_START=$(date +"%s")
+	
+					while [ $COUNT -lt $COUNT_MAX ]; do
+						IF=${ALL[$COUNT]}
+						OF=${ALL[$COUNT]}.norm.mp4
+	
+						bash -c "touch $T/\$\$; ffmpeg-normalize \"$IF\" -o \"$OF\" -c:a aac -b:a 192k -ar 48000 -nt $NORM_TYPE -t $NORM_TARGET -tp 0.0 -p -v -f; rm -f \"$IF\"; rm -f $T/\$\$" &
+
+						# Print busy count
+						echo "Normalizations in progress: $(ls $T | wc -l)"
+	
+						# Wait until less than 4 encoding sessions are running
+						while [ true ]; do
+							ENC_RUN=$(ls $T | wc -l)
+							if [ $ENC_RUN -lt 4 ]; then
+								break
+							fi
+	
+							sleep 1
+						done
+		
+						COUNT=$((COUNT + 1))
+					done
+
+					# Wait until last ones are complete
+					while [ true ]; do
+						ENC_RUN=$(ls $T | wc -l)
+						if [ $ENC_RUN -eq 0 ]; then
+							break
+						fi
+					
+						sleep 1
+					done
+	
+					NORM_END=$(date +"%s")
+					NORM_TIME=$(date +%T --date="1970-01-01 + $((NORM_END - NORM_START)) seconds")
+					sync
+	
+					echo "Normalizing Complete: $COUNT_MAX tracks, in $NORM_TIME"
+		
+					IFS="$OIFS"
+					rm -rf $T
+				else
+					echo "Player Normalizing disabled in settings"
+					echo "Copying pre-normalized files only"
+					
+					mkdir -p /home/eplayer/enc_drive/live
+					rsync -av --delete /home/eplayer/enc_drive/update/ /home/eplayer/enc_drive/live/
+
+					# Delete empty directories if files were removed
+					find /home/eplayer/enc_drive/live/playlists -type d -empty -delete
+					sync
+
+					echo "Copying pre-normalized files done"
+				fi
+	
+				OLD_VERSION=$(cat /boot/firmware/eplayer/settings/.version)
+		
+				echo "Update Settings"
+				s3cmd -v --config /run/commission/.s3cfg-music sync --no-preserve s3://ep-settings/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/settings/ /boot/firmware/eplayer/settings/
+				RET=$?
+				if [ $RET -ne 0 ]; then
+					echo "Update attempt returned (Ret: $RET)"
+					continue
+				fi
+		
+				NEW_VERSION=$(cat /boot/firmware/eplayer/settings/.version)
+
+				echo "OLD VERSION: $OLD_VERSION"
+				echo "NEW VERSION: $NEW_VERSION"
+				echo "Update Compelted (including normalization) - Rebooting" 
+		
+				# Update End
+				TE="$(date)"
+				L=$(/bin/offline-version)
+				O=$(/bin/online-version)
+				echo "UPDATE STARTED: $TS" > /run/.heartbeat
+				echo "UPDATE ENDED: $TE" >> /run/.heartbeat
+				echo "ONLINE VERSION: $O" >> /run/.heartbeat
+				echo "LOCAL VERSION: $L" >> /run/.heartbeat
+				echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
+				echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
+				echo "INFO: Update Success" >> /run/.heartbeat
+				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+		
+				# Reboot to apply updates
+				reboot
+			else
+				# Update End
+				TE="$(date)"
+				L=$(/bin/offline-version)
+				O=$(/bin/online-version)
+				echo "UPDATE STARTED: $TS" > /run/.heartbeat
+				echo "UPDATE ENDED: $TE" >> /run/.heartbeat
+				echo "ONLINE VERSION: $O" >> /run/.heartbeat
+				echo "LOCAL VERSION: $L" >> /run/.heartbeat
+				echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
+				echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
+				echo "INFO: No Update" >> /run/.heartbeat
+				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+				
+				# No update continue to boot
+				break
+			fi
+
+		done
+	else
+		echo "Commissioning and Settings files not found for required S3 update"
+	fi	
+fi
+
+# GREEN LED
+/bin/led-control led0 off
+
+# Cleanup
+rm -rf /run/commission
+rm -rf $KEYFILE

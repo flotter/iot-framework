@@ -1,0 +1,16 @@
+[Unit]
+Description="Crypto Key Commissioning"
+After=boot-firmware.mount
+Before=home-eplayer-enc_drive.mount
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/bin/
+RemainAfterExit=yes
+ExecStart=/bin/crypt-commission-start
+ExecStop=/bin/crypt-commission-end
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

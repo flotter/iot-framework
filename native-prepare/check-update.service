@@ -1,0 +1,15 @@
+[Unit]
+Description="Update Checker"
+After=ep-update.service
+Wants=ep-update.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/check-update
+Restart=always
+RestartSec=5
+StandardOutput=journal
+
+[Install]
+WantedBy=default.target

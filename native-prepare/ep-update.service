@@ -1,0 +1,15 @@
+[Unit]
+Description="Eplayer Updater"
+After=cryptkey.service
+Wants=cryptkey.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/bin/
+RemainAfterExit=yes
+ExecStart=/bin/online-update
+StandardOutput=journal
+
+[Install]
+WantedBy=default.target
