@@ -167,10 +167,10 @@ pnn "- Disable Snapd : "
 run apt-get purge -y snapd
 py "DONE"
 
-pnn "- Compiling and installing epkey : "
-run gcc $CPWD/native-prepare/epkey.c -o $CPWD/native-prepare/epkey
-run chmod +x $CPWD/native-prepare/epkey
-run cp $CPWD/native-prepare/epkey /bin
+pnn "- Compiling and installing xkey : "
+run gcc $CPWD/native-prepare/xkey.c -o $CPWD/native-prepare/xkey
+run chmod +x $CPWD/native-prepare/xkey
+run cp $CPWD/native-prepare/xkey /bin
 py "DONE"
 
 pnn "- Installing encrypted drive service : "
