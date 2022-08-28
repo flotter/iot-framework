@@ -50,7 +50,7 @@ while [ true ]; do
 	BOOT_DIR=/boot/firmware/eplayer
 
 	echo "Crypt-Commission: Key generation"
-	/bin/epkey
+	/bin/xkey
 
 	# Make commissioning data available under /run
 	if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then

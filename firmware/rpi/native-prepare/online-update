@@ -36,7 +36,7 @@ touch $REBOOT_DIR/$REBOOT_FILE
 echo "$(($(cat $REBOOT_DIR/$REBOOT_FILE) + 1))" > $REBOOT_DIR/$REBOOT_FILE
 
 echo "Crypt-Commission: Key generation"
-/bin/epkey
+/bin/xkey
 
 # Make commissioning data available under /run
 if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then
