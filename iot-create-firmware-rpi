@@ -296,12 +296,12 @@ mount --bind /dev/pts $CPWD/mnt/root/dev/pts
 mkdir -p $CPWD/mnt/root/boot/firmware
 mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
 mkdir -p $CPWD/mnt/root/home/rpi/native-prepare
-mount --bind $CPWD/native-prepare $CPWD/mnt/root/home/rpi/native-prepare
+mount --bind $CPWD/firmware/rpi/native-prepare $CPWD/mnt/root/home/rpi/native-prepare
 
 mv $CPWD/mnt/root/etc/resolv.conf $CPWD/mnt/root/etc/resolv.conf.backup
 echo "nameserver 8.8.8.8" > $CPWD/mnt/root/etc/resolv.conf
 cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
-cp -f $CPWD/native-prepare.sh $CPWD/mnt/root/home/rpi
+cp -f $CPWD/firmware/rpi/native-prepare.sh $CPWD/mnt/root/home/rpi
 echo "$BUILD_VERSION" > $CPWD/mnt/root/home/rpi/.firmware_version
 
 echo "GEN_PRODUCTION=$PRODUCTION" >> $CPWD/mnt/root/home/rpi/native-input

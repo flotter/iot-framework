@@ -1,0 +1,1 @@
+ssh -i security/ec2/iot-telemetry.pem ubuntu@ec2.iot-training.net
