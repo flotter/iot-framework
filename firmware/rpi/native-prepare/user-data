@@ -12,14 +12,14 @@ users:
   - name: root
     lock_passwd: false
     shell: /bin/bash
-    passwd: $6$Yk.pehP7w9rM$NPyopOHLrHTXHqyGQDiTdlvTgl8hGsogCXMos8e7OXcMfpLmzJSU4rzox7cSEAZwLhMdoWPQd2PHDqaXWNKQC.
+    passwd: $6$qHeKH/rukTyG1T$Kh/s5VU3TNVzZG7HYH.ytOhh0s88jr1/OcfaxmsWWDsFmRBLk0Fx5oEQfA8zIZ4Ra4xWtNAUxQWm3qdM0i.py0
   - name: rpi
     gecos: rpi
     groups: [adm, docker, netdev, plugdev, sudo, users]
     sudo: ["ALL=NOPASSWD: /sbin/shutdown, /sbin/reboot, /bin/ls, /bin/cat"]
     lock_passwd: false
     shell: /bin/bash
-    passwd: $6$Yk.pehP7w9rM$NPyopOHLrHTXHqyGQDiTdlvTgl8hGsogCXMos8e7OXcMfpLmzJSU4rzox7cSEAZwLhMdoWPQd2PHDqaXWNKQC.
+    passwd: $6$qHeKH/rukTyG1T$Kh/s5VU3TNVzZG7HYH.ytOhh0s88jr1/OcfaxmsWWDsFmRBLk0Fx5oEQfA8zIZ4Ra4xWtNAUxQWm3qdM0i.py0
 
 # Enable password authentication with the SSH daemon
 ssh_pwauth: true
