@@ -1,0 +1,665 @@
+#!/bin/bash
+
+### DEFINES ###
+
+USER=`whoami`
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+COMM_VERSION="v1.0.0"
+DATE=$(date +"%d_%m_%y__%H_%M_%S")
+IMAGE_INPUT_DIR=$CPWD/images/rpi
+IMAGE_DL_DIR=$CPWD/downloads/rpi
+
+S3_ALL=$CPWD/security/s3/.s3cfg-all
+S3_DEVICE_FW="s3://iot-device-fw/rpi"
+S3_DEVICE_DL="s3://iot-device-download"
+S3_DEVICE_UL="s3://iot-device-upload"
+S3_SOURCE=$CPWD/data
+
+# 1MB blocks
+PAYLOAD_MAX_SIZE=1024
+
+LOG=$S3_SOURCE/commission-log.txt
+
+P_RESET="\e[0m"
+P_RED="\e[31m"
+P_GREEN="\e[32m"
+
+### MACROS ###
+
+run() {
+        if $VERBOSE; then
+                v=$(exec 2>&1 && set -x && set -- "$@")
+                echo "#${v#*--}"
+                "$@"
+        else
+                "$@" >/dev/null 2>&1
+        fi
+}
+
+function pl() {
+	echo -e "$P_RESET"
+}
+
+function pn() {
+	echo -e "$P_RESET$@"
+}
+
+function pr() {
+	echo -e "$P_RED$@$P_RESET"
+}
+
+function pg() {
+	echo -e "$P_GREEN$@$P_RESET"
+}
+
+function pnn() {
+	echo -ne "$P_RESET$@"
+}
+
+function prn() {
+	echo -ne "$P_RED$@$P_RESET"
+}
+
+function pgn() {
+	echo -ne "$P_GREEN$@$P_RESET"
+}
+
+function exitbuild() {
+	if [ "x$SOURCED" == "x1" ]; then
+		return 1
+	else
+		exit 1
+	fi
+}
+
+### OPTIONS ###
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+IMAGE_INPUT=
+CUST_INPUT=
+SITE_INPUT=
+INTERACTIVE=false
+SKIP_PAYLOAD=false
+
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	elif [ "x$STRIP" == "x-i" ]; then
+		INTERACTIVE=true
+	elif [ "x$STRIP" == "x-m" ]; then
+		SKIP_PAYLOAD=true
+	elif [ "x$STRIP" == "x-f" ]; then
+		COUNT=$((COUNT+1))
+		IMAGE_INPUT=${ARGV[COUNT]}
+		if [ "x$IMAGE_INPUT" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
+	elif [ "x$STRIP" == "x-c" ]; then
+		COUNT=$((COUNT+1))
+		CUST_INPUT=${ARGV[COUNT]}
+		if [ "x$CUST_INPUT" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
+	elif [ "x$STRIP" == "x-s" ]; then
+		COUNT=$((COUNT+1))
+		SITE_INPUT=${ARGV[COUNT]}
+		if [ "x$SITE_INPUT" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+pl
+pg "IOT Device Image Commissioning Tool $COMM_VERSION"
+pl
+
+echo "[$(date)] Commissioning Started OK" >> $LOG
+
+if [ "$HELP" == "true" ]; then
+	pn "Usage:"
+	pl
+	pn "ep-commission [-v] [-h] [-i <PATH>]"
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)      Verbose output for operations"
+	pn "-h (--help)         Print this"
+	pn "-i (--interactive)  Interactive bash"
+	pn "-f (--file-image)   Image to commission"
+	pn "-c (--cust-input)   Customer selected"
+	pn "-s (--site-input)   Site selected"
+	pn "-m (--payload-skip) Do not transfer site payload now"
+	pl
+	exitbuild
+fi
+
+pn
+pg ":: ENVIRONMENT SETUP ::"
+pn
+
+pnn "- Running as user : "
+pg $SUDO_USER
+
+pnn "- Running with SUDO : "
+ID=$(id -u)
+if [ "x$ID" == "x0" ]; then
+    pg "YES"
+else
+    pr "NO"
+    exitbuild
+fi
+
+pnn "- Disabling automount : "
+gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
+pg "DONE"
+
+pnn "- Cleaning up environment for commissioning : "
+rm -rf $CPWD/mnt
+pg "DONE"
+
+pnn "- Installing missing components : "
+
+run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ffmpeg
+run apt-get install -y python3-pip
+run python3 -m pip install --upgrade pip
+run python3 -m pip install s3cmd
+run python3 -m pip install ffmpeg-normalize
+
+pg "DONE"
+
+### CONFIRM CLOUD IN SYNC
+
+pl
+pn "You are about to commission an IOT device using the local (master) copy"
+pn "of the database. In order for the unit to function as intended, the cloud"
+pn "database must be in sync."
+pl
+pr "Do you want to go ahead with commissioning?"
+pl
+pnn "Type 'ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xok" ]; then
+	pl
+	pr "Commissioning aborted"
+	exit 1
+fi
+
+### 1. GET IMAGE ###
+
+pl
+pg ":: REMOTE IMAGE SELECTION ::"
+pl
+pn "Note: Selecting a remote image deletes all local images"
+pl
+
+if [ "x$IMAGE_INPUT" == "x" ] || [ ! -f "$IMAGE_INPUT" ]; then
+	mkdir -p $IMAGE_INPUT_DIR
+	IMAGES=($(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
+	IMAGES=(${IMAGES[@]} "* Local Images *")
+	COUNT=0
+	COUNT_MAX=${#IMAGES[@]}
+	SELECT=$COUNT_MAX
+	ITER=0
+
+	if [ $COUNT_MAX -eq 0 ]; then
+		pr "No images in $IMAGE_INPUT_DIR"
+		exit 1
+	fi
+
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
+
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+
+		COUNT=0
+		while [ $COUNT -lt $COUNT_MAX ]; do
+			pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+
+
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	IMAGE_INPUT=${IMAGES[$SELECT]}
+
+	if [ "x$((SELECT + 1))" == "x$COUNT_MAX" ]; then
+	
+		pn
+		pg ":: LOCAL IMAGE SELECTION ::"
+		pn
+	
+		mkdir -p $IMAGE_INPUT_DIR
+		IMAGES=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz))
+		COUNT=0
+		COUNT_MAX=${#IMAGES[@]}
+		SELECT=$COUNT_MAX
+		ITER=0
+	
+		if [ $COUNT_MAX -eq 0 ]; then
+			pr "No images in $IMAGE_INPUT_DIR"
+			exit 1
+		fi
+	
+		while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
+	
+			if [ $ITER -ne 0 ]; then
+				pl
+				pr "Error: Your choice is invalid!\n"
+				pl
+			fi 
+	
+			COUNT=0
+			while [ $COUNT -lt $COUNT_MAX ]; do
+				pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
+				COUNT=$((COUNT + 1))
+			done
+	
+	
+			read -n 1 -s SELECT
+			SELECT=$((SELECT - 1))
+			ITER=$((ITER + 1))
+		done
+		IMAGE_INPUT=$IMAGE_INPUT_DIR/${IMAGES[$SELECT]}
+	else
+		# Remote image download and extract
+		pl
+		pnn "- Downloading image from S3 (2.5GB takes time...) : "
+		run rm -rf $IMAGE_INPUT_DIR
+		run rm -rf $IMAGE_DL_DIR
+		mkdir -p $IMAGE_INPUT_DIR
+		mkdir -p $IMAGE_DL_DIR
+		run s3cmd --config $S3_ALL get $S3_DEVICE_FW/$IMAGE_INPUT.tar.gz $IMAGE_DL_DIR/ 
+		RET=$?
+		if [ $RET -ne 0 ]; then
+			pl
+			pr "IMAGE: Download failed (Ret: $RET)"
+			exit 1
+		fi
+		pg "DONE"
+		pnn "- Decompressing image (takes time...): "
+		if [ ! -f $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz ]; then
+			pl
+			pr "IMAGE: Not found (Image: $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz)"
+			exit 1
+		else
+			run rm -rf $IMAGE_INPUT_DIR/$IMAGE_INPUT
+			run tar xvzf $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz -C $IMAGE_INPUT_DIR/
+			IMAGE_INPUT=$IMAGE_INPUT_DIR/$IMAGE_INPUT
+		fi
+		pg "DONE"
+
+	fi
+else
+	pn "Supplied via command-line options"
+fi
+
+### 1. GET CUSTOMER ###
+
+pn
+pg ":: CUSTOMER SELECTION ::"
+pn
+
+
+# Only show the list if no valid selection was specified
+if [ "x$CUST_INPUT" == "x" ] || [ ! -d "$S3_SOURCE/$CUST_INPUT" ]; then
+	
+	CUST_LIST=($(ls $S3_SOURCE | grep cust-))
+	CUST_LIST_MAX=${#CUST_LIST[@]}
+	SELECT=$CUST_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+	
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+	
+		COUNT=0
+		while [ $COUNT -lt $CUST_LIST_MAX ]; do
+			pn "[$((COUNT + 1))] ${CUST_LIST[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+	
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	CUST_INPUT=${CUST_LIST[$SELECT]}
+else
+	pn "Supplied via command-line options"
+fi
+
+pn
+pg ":: SITE SELECTION ::"
+pn
+
+# Only show the list if no valid selection was specified
+if [ "x$SITE_INPUT" == "x" ] || [ ! -d "$S3_SOURCE/$SITE_INPUT" ]; then
+
+	SITE_LIST=($(ls $S3_SOURCE/$CUST_INPUT | grep site-))
+	SITE_LIST_MAX=${#SITE_LIST[@]}
+	SELECT=$SITE_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+	
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+	
+		COUNT=0
+		while [ $COUNT -lt $SITE_LIST_MAX ]; do
+			pn "[$((COUNT + 1))] ${SITE_LIST[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+	
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	SITE_INPUT=${SITE_LIST[$SELECT]}
+else
+	pn "Supplied via command-line options"
+fi
+
+pl
+pnn "- Image selected : "
+pg $IMAGE_INPUT
+pnn "- Customer selected : "
+pg $CUST_INPUT
+pnn "- Site selected : "
+pg $SITE_INPUT
+pl
+
+echo "[$(date)] Commissioning Details [$IMAGE_INPUT, $CUST_INPUT, $SITE_INPUT]" >> $LOG
+
+pnn "- Creating target image : "
+IMAGE_INPUT_NEW="$S3_SOURCE/$CUST_INPUT/$SITE_INPUT/$(echo $(basename $IMAGE_INPUT) | sed -n 's/^\(.*\).img/\1/p')-commissioned-$CUST_INPUT-$SITE_INPUT-${COMM_VERSION}_${DATE}.img"
+run cp -f $IMAGE_INPUT $IMAGE_INPUT_NEW
+IMAGE_INPUT=$IMAGE_INPUT_NEW
+pg "DONE"
+
+pnn "- Output Image : "
+pg $IMAGE_INPUT
+
+pnn "- Checking if settings is available : "
+if [ -d $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings ]; then
+	pg "PASS"
+else
+	pr "FAIL"
+	pl
+	pr "Settings does not exist ($CUST_INPUT/$SITE_INPUT/settings)"
+	pl
+	pn "Please create settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
+	exit 1
+fi
+
+pnn "- Checking if WIFI is customer specific : "
+if [ -f $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi ]; then
+	cat $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi | grep "TEST-SSID" > /dev/null 2>&1
+	RET=$?
+	if [ $RET -eq 0 ]; then
+		pr "FAIL"
+		pl
+		pr "WIFI settings not site specific - remove unused ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
+		pl
+		pn "Please edit WIFI settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
+		exit 1
+	fi
+	pg "PASS"
+else
+	pr "FAIL"
+	pl
+	pr "WIFI settings does not exist ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
+	pl
+	pn "Please create settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
+	exit 1
+fi
+
+pnn "- Checking WIFI settings : "
+mkdir -p /tmp/testyaml
+/lib/netplan/generate -r /tmp/testyaml $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi
+RET=$?
+if [ $RET -ne 0 ]; then
+	pr "FAIL"
+	pl
+	pr "Wifi settings invalid for Netplan ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
+	
+	echo "[$(date)] Wifi settings invalid ($CUST_INPUT/$SITE_INPUT/settings/.wifi)" >> $LOG
+	
+	exit 1
+fi
+pg "DONE"
+rm -rf /tmp/testyaml
+
+pnn "- Checking payload : "
+if [ ! -d $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload ]; then
+	pg "NOT SUPPLIED"
+else
+	
+	if [ -z "$(ls -A $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload)" ]; then
+		pr "FAIL"
+		pl
+		pr "Empty payload folder not allowed ($CUST_INPUT/$SITE_INPUT/payload)"
+		pl
+		pn "Delete the folder or add payload files."
+		exit 1
+	fi
+	
+	S=$(du -hs --block-size=1M $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
+	if [ $S -gt $PAYLOAD_MAX_SIZE ]; then
+		pr "FAIL"
+		pl
+		pr "Playlists exceed ${PAYLOAD_MAX_SIZE}Mib ($CUST_INPUT/$SITE_INPUT/payload)"
+		exit 1
+	fi
+fi
+
+
+
+echo "[$(date)] Commissioning checks OK" >> $LOG
+
+		
+pnn "- Syncing cloud with payload data : "
+
+PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL --no-check-md5 sync --no-preserve --delete-removed $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/ $S3_DEVICE_DL/$CUST_INPUT/$SITE_INPUT/payload/ 2>&1)
+PAYLOAD_UPDATE_RET=$?
+
+if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
+	pl
+	pr "PAYLOAD: Upload failed (Ret: $PAYLOAD_UPDATE_RET)"
+	exit 1
+fi		
+
+pg "DONE"
+
+pnn "- Syncing cloud with settings : "
+
+SETTINGS_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/ $S3_DEVICE_DL/$CUST_INPUT/$SITE_INPUT/settings/ 2>&1)
+SETTINGS_UPDATE_RET=$?
+	
+if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
+	pl
+	pr "SETTINGS: Upload failed (Ret: $SETTINGS_UPDATE_RET)"
+	exit 1
+fi	
+
+# Set commissioned flag under stats
+mkdir -p $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/	
+if [ ! -f $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned ]; then
+	touch $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned
+	run s3cmd -v --config $S3_ALL put --no-preserve $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned $S3_DEVICE_UL/$CUST_INPUT/$SITE_INPUT/
+fi
+
+pg "DONE"
+
+pnn "- Mounting root filesystem : "
+
+LOOPDEV=$(losetup --show -P -f $IMAGE_INPUT)
+mkdir -p $CPWD/mnt/boot
+mkdir -p $CPWD/mnt/enc
+mkdir -p $CPWD/mnt/root
+mount -o rw ${LOOPDEV}p4 $CPWD/mnt/enc
+mount -o rw ${LOOPDEV}p2 $CPWD/mnt/root
+mount -o rw ${LOOPDEV}p1 $CPWD/mnt/boot
+
+pg "DONE"
+
+# We need to commission this image to match a customer::site
+
+pnn "- Inserting Customer and Site ID : "
+mkdir -p $CPWD/mnt/boot/iot/commission
+echo "$CUST_INPUT" > $CPWD/mnt/boot/iot/commission/.cust
+echo "$SITE_INPUT" > $CPWD/mnt/boot/iot/commission/.site
+pg "DONE"
+
+pnn "- Hostname : "
+run sed -i "s/HOSTNAMEXXX/RPI-$(echo $CUST_INPUT | sed 's/cust-//g')-$(echo $SITE_INPUT | sed 's/site-//g')/g" $CPWD/mnt/boot/user-data
+pg "DONE"
+
+pnn "- Inserting S3 Keys : "
+run cp -f $CPWD/security/s3/.s3cfg-download $CPWD/mnt/boot/iot/commission/.s3cfg-download
+run cp -f $CPWD/security/s3/.s3cfg-upload $CPWD/mnt/boot/iot/commission/.s3cfg-upload
+pg "DONE"
+
+
+pnn "- Installing unit settings (i.e. wifi) : "
+mkdir -p $CPWD/mnt/boot/iot
+run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings $CPWD/mnt/boot/iot/
+echo "-1" > $CPWD/mnt/boot/iot/settings/.version
+pg "DONE"
+
+
+pnn "- Payload pre-commissioning : "
+
+if [ "x$SKIP_PAYLOAD" == "xfalse" ]; then
+	mkdir -p $CPWD/mnt/enc/live/payload
+	mkdir -p $CPWD/mnt/enc/update/payload
+        run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/* $CPWD/mnt/enc/live/payload/
+        run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/* $CPWD/mnt/enc/update/payload/
+	run touch $CPWD/mnt/boot/iot/.enc-formatted
+	pg "DONE"
+else
+	pg "SKIPPED"
+fi
+
+if [ "x$INTERACTIVE" == "xtrue" ]; then
+	
+	pnn "- Preparing for foreign chroot : "
+	
+	mount --bind /dev $CPWD/mnt/root/dev/
+	mount --bind /sys $CPWD/mnt/root/sys/
+	mount --bind /proc $CPWD/mnt/root/proc/
+	mount --bind /dev/pts $CPWD/mnt/root/dev/pts
+	mkdir -p $CPWD/mnt/root/boot/firmware
+	mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
+        
+        mkdir -p $CPWD/mnt/root/home/iot/enc_drive
+        mount --bind $CPWD/mnt/enc $CPWD/mnt/root/home/iot/enc_drive  
+	
+	cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
+	
+	pg "DONE"
+	
+	pn
+	pg "Foreign chroot start"
+	pn
+	
+	chroot $CPWD/mnt/root /bin/bash 
+	
+	pn
+	pg "Foreign chroot end"
+	pn
+	
+	pnn "- Cleaning up chroot : "
+	
+	rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
+	
+	sync
+	
+        umount $CPWD/mnt/root/home/iot/enc_drive
+        rm -rf $CPWD/mnt/root/home/iot/enc_drive
+	umount $CPWD/mnt/root/boot/firmware
+	umount $CPWD/mnt/root/dev/pts
+	umount $CPWD/mnt/root/dev/
+	umount $CPWD/mnt/root/sys/
+	umount $CPWD/mnt/root/proc/
+	
+	pg "DONE"
+	
+	
+fi
+
+pnn "- Waiting for depedencies (5sec) : "
+sync
+sleep 5
+pg "OK"
+
+pnn "- Unmounting root filesystem : "
+cd $CPWD/
+umount ${LOOPDEV}p1
+umount ${LOOPDEV}p2
+umount ${LOOPDEV}p4
+rm -d $CPWD/mnt/boot
+rm -d $CPWD/mnt/root
+rm -d $CPWD/mnt/enc
+pg "DONE"
+
+pnn "- Waiting for depedencies (5sec) : "
+sync
+sleep 5
+run losetup -d ${LOOPDEV}
+pg "OK"
+
+pl
+pg "Image Ready: $IMAGE_INPUT"
+pl
