@@ -1,0 +1,19 @@
+# Time to start updates and reboot
+# 24h clock (retry period start and end)
+update-time-start=02:00
+update-time-end=06:00
+
+# How many days to skip the update slot for
+# (This includes uploading stats)
+update-time-skip-days=0
+
+# Enable immediate update (yes, no)
+# (Do not wait for update time)
+update-live=yes
+
+# Make updates download debug logs
+debug-logs=yes
+
+# How often the unit dails in to indicate
+# its alive (seconds)
+heartbeat-rate=300

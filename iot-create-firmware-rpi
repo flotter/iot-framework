@@ -5,7 +5,7 @@
 USER=`whoami`
 CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
 
-BUILD_VERSION="v0.0.1"
+BUILD_VERSION="v1.0.0"
 BUILD_DATE=$(date +"%d_%m_%y__%H_%M_%S")
 BUILD_OUTPUT_DIR=$CPWD/images
 BUILD_IMAGE="ubuntu-22.04-preinstalled-server-arm64+raspi"
