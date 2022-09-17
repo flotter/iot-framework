@@ -1,0 +1,173 @@
+#!/bin/bash -e
+
+#----------------------------------------------------#
+# COMMON DEFINES                                     #
+#----------------------------------------------------#
+
+if [ -z "$SUDO_USER" ]; then
+	USER=$(whoami)
+else
+	USER=$SUDO_USER
+fi
+
+DATE=$(date +"%d_%m_%y__%H_%M_%S")
+
+#----------------------------------------------------#
+# LOCAL DIRECTORIES                                  #
+#----------------------------------------------------#
+
+REPO_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && cd .. && pwd )
+MASTER_DB=$REPO_ROOT/database
+TOOL_SETTINGS=/home/$USER/.iot-tools/settings
+
+#----------------------------------------------------#
+# PRINTING ROUTINES                                  #
+#----------------------------------------------------#
+
+P_RESET="\e[0m"
+P_RED="\e[31m"
+P_GREEN="\e[32m"
+
+function pl() {
+	echo -e "$P_RESET"
+}
+
+function pn() {
+	echo -e "$P_RESET$@"
+}
+
+function pr() {
+	echo -e "$P_RED$@$P_RESET"
+}
+
+function pg() {
+	echo -e "$P_GREEN$@$P_RESET"
+}
+
+function pnn() {
+	echo -ne "$P_RESET$@"
+}
+
+function prn() {
+	echo -ne "$P_RED$@$P_RESET"
+}
+
+function pgn() {
+	echo -ne "$P_GREEN$@$P_RESET"
+}
+
+function log() {
+	echo "[$(date) - $VERSION] $@" >> $LOG
+}
+
+#----------------------------------------------------#
+# VERBOSITY CONTROL                                  #
+#----------------------------------------------------#
+
+run() {
+        if $VERBOSE; then
+                v=$(exec 2>&1 && set -x && set -- "$@")
+                echo "#${v#*--}"
+                "$@"
+        else
+                "$@" >/dev/null 2>&1
+        fi
+}
+
+#----------------------------------------------------#
+# SETUP ROUTINES                                     #
+#----------------------------------------------------#
+
+common_setup() {
+	
+        pnn "- Apply settings : "
+        mkdir -p $(dirname $TOOL_SETTINGS)
+        touch $TOOL_SETTINGS
+        if [ -v IOT_DOMAIN ]; then
+        	sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
+                echo "IOT_DOMAIN=$IOT_DOMAIN" >> $TOOL_SETTINGS
+	fi
+        if [ -v IOT_ADMIN ]; then
+        	sed -i '/IOT_ADMIN/d' $TOOL_SETTINGS
+                echo "IOT_ADMIN=$IOT_ADMIN" >> $TOOL_SETTINGS
+	fi
+        pg "Done"
+
+	pnn "- Running as user : "
+        pg $USER
+	
+	pnn "- Running with Sudo : "
+	ID=$(id -u)
+	if [ "x$ID" == "x0" ]; then
+	    pg "Yes"
+	else
+	    pr "No"
+	    exit 1
+	fi
+
+	pnn "- Disabling automount : "
+	gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
+	pg "Done"
+	
+	pnn "- Installing missing components : "
+	run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev
+	run apt-get install -y python3-pip
+	run python3 -m pip install --upgrade pip
+	run python3 -m pip install s3cmd
+	pg "Done"
+
+}
+
+admin() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_ADMIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs
+	fi
+}
+
+domain() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_DOMAIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs
+	fi
+}
+
+#----------------------------------------------------#
+# VERSIONING                                         #
+#----------------------------------------------------#
+
+which git > /dev/null 2>&1
+GIT_RET=$?
+if [ $GIT_RET -ne 0 ]; then
+	pn
+	pr "Cannot find git tool"
+	pn
+	exit 1
+fi
+GITHASH=$(cd $REPO_ROOT && git rev-parse --short HEAD)
+GIT_RET=$?
+if [ $GIT_RET -ne 0 ]; then
+	pn
+	pr "Cannot find IOT git repo hash"
+	pn
+	exit 1
+fi
+GITTAG=$(cd $REPO_ROOT && git describe --tags --abbrev=0)
+GIT_RET=$?
+if [ $GIT_RET -ne 0 ]; then
+	pn
+	pr "Cannot find IOT git repo hash"
+	pn
+	exit 1
+fi
+
+VERSION="$GITTAG-$GITHASH"
+
+
+#----------------------------------------------------#
+# AWS S3 DEFINES                                     #
+#----------------------------------------------------#
+
+S3_ALL=$REPO_ROOT/security/s3/.s3cfg-all
+S3_DEVICE_FW="s3://iot-device-fw"
+S3_DEVICE_DL="s3://iot-device-download"
+S3_DEVICE_UL="s3://iot-device-upload"
+

@@ -1,0 +1,273 @@
+#!/bin/bash -e
+
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#----------------------------------------------------#
+# COMMON ATTRIBUTES                                  #
+#----------------------------------------------------#
+
+source $CPWD/common/iot-utils
+
+#----------------------------------------------------#
+# DEFINES / MACROS                                   #
+#----------------------------------------------------#
+
+LOG=$MASTER_DB/add-domain.log
+
+#----------------------------------------------------#
+# CMDLINE OPTIONS                                    #
+#----------------------------------------------------#
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+log "Started"
+
+pl
+pg "iot-add-domain ($VERSION)"
+
+if [ "$HELP" == "true" ]; then
+        pl
+	pn "Usage:"
+	pl
+        pn "Add new customers and customer sites. This creates a new"
+        pn "operational domain for devices, with its own settings and"
+        pn "payload."
+        pl
+	pn "iot-add-domain [-v] [-h] ..."
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
+	pl
+	exit 1
+fi
+
+#----------------------------------------------------#
+# PREPARE                                            #
+#----------------------------------------------------#
+
+pn
+pg ":: Environment Setup ::"
+pn
+
+common_setup
+
+log "Common Setup OK"
+
+pl
+pg ":: Admin Check ::"
+pl
+pnn "- Admin : "
+if [ "x$(admin)" == "x1" ]; then
+	pg "Yes"
+else
+	pr "No"
+	exit 1
+fi
+
+log "Admin OK"
+
+#----------------------------------------------------#
+# BODY                                               #
+#----------------------------------------------------#
+
+pl
+pg ":: Add Domain Confirmation ::"
+pl
+pnn "Type 'ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xok" ]; then
+	pl
+	pr "Add aborted"
+	exit 1
+fi
+
+log "Confirmation granted"
+
+pl
+pn "A domain consist of a Customer ID and a Site ID. It is"
+pn "possible for multiple Site IDs to be associated with a"
+pn "single Customer ID, not the other way around. Do you"
+pn "want to create a new Customer ID first, or do you want"
+pn "to add a new Site ID to an existing Customer ID?"
+pl
+
+pnn "Create new Customer ID? [y, N] "
+read -n1 -s SELECT
+pl
+if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
+	pnn "Specify Customer ID : cust-"
+	read CUST
+	CUST=cust-$CUST
+
+	if [ "x$CUST" == "xcust-" ]; then
+		pl
+		pr "Empty Customer ID suffix is not allowed"
+		pl
+		exit 1
+	fi
+
+	if [ -d $MASTER_DB/$CUST ]; then
+		pl
+		pr "Customer ID cannot be created, it already exists ($CUST)"
+		pl
+		exit 1
+	fi
+else
+
+	CUST_LIST=($(ls $MASTER_DB | grep cust-))
+	CUST_LIST_MAX=${#CUST_LIST[@]}
+	SELECT=$CUST_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+	
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+	
+		COUNT=0
+		while [ $COUNT -lt $CUST_LIST_MAX ]; do
+			pn "[$((COUNT + 1))] ${CUST_LIST[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+	
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	CUST=${CUST_LIST[$SELECT]}
+fi
+
+## SITE
+
+pl
+pgn "Create new customer site in database? [y, N] (alternatively use existing)"
+read -n1 -s SELECT
+pl
+if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
+	pgn "Specify customer site name : [site-]"
+	read SITE
+	SITE=site-$SITE
+
+	if [ "x$SITE" == "x" ]; then
+		pl
+		pr "Empty customer site cannot be created"
+		pl
+		continue
+	fi
+
+	if [ -d $MASTER_DB/$CUST/$SITE ]; then
+		pl
+		pr "Customer site cannot be created, it already exists ($SITE)"
+		pl
+		continue
+	fi
+else
+
+	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site-))
+	SITE_LIST_MAX=${#SITE_LIST[@]}
+	SELECT=$SITE_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+	
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+	
+		COUNT=0
+		while [ $COUNT -lt $SITE_LIST_MAX ]; do
+			pn "[$((COUNT + 1))] ${SITE_LIST[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+	
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	SITE=${SITE_LIST[$SELECT]}
+fi
+
+## CONFIRM
+
+pl
+pg "You have selected the following details:"
+pl
+pnn "- Customer selected : "
+pg $CUST
+pnn "- Site selected : "
+pg $SITE
+pl
+pr "Do you want to go ahead ?"
+pl
+pnn "Type 'ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xok" ]; then
+	pl
+	pr "Add aborted"
+	exit 1
+fi
+
+
+echo "[$(date)] Add/Modify Creating [$CUST, $SITE]" >> $LOG
+
+pl
+pnn "- Creating directory structure : "
+mkdir -p $MASTER_DB/$CUST/$SITE/payload
+echo "Empty payload area" > $MASTER_DB/$CUST/$SITE/payload/README
+mkdir -p $MASTER_DB/$CUST/$SITE/settings
+
+run tar xvzf $CPWD/firmware/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
+
+pg "Done"
+
+pl
+pg "Customer/Site update complete."
+pl
+pg "Please update the files under : $CUST/$SITE/settings/"
+pl
+pnn "Press any key to continue"
+read -n1 -s SELECT
+

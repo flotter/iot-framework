@@ -1,0 +1,421 @@
+#!/bin/bash
+
+### DEFINES ###
+
+USER=`whoami`
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+SCRIPT_VERSION="v1.0.0"
+DATE=$(date +"%d_%m_%y__%H_%M_%S")
+
+S3_ALL=$CPWD/security/s3/.s3cfg-all
+S3_DEVICE_DL="s3://iot-device-download"
+S3_DEVICE_UL="s3://iot-device-upload"
+S3_SOURCE=$CPWD/data
+
+LOG=$S3_SOURCE/cloud-sync-log.txt
+
+P_RESET="\e[0m"
+P_RED="\e[31m"
+P_GREEN="\e[32m"
+
+### MACROS ###
+
+run() {
+        if $VERBOSE; then
+                v=$(exec 2>&1 && set -x && set -- "$@")
+                echo "#${v#*--}"
+                "$@"
+        else
+                "$@" >/dev/null 2>&1
+        fi
+}
+
+function pl() {
+	echo -e "$P_RESET"
+}
+
+function pn() {
+	echo -e "$P_RESET$@"
+}
+
+function pr() {
+	echo -e "$P_RED$@$P_RESET"
+}
+
+function pg() {
+	echo -e "$P_GREEN$@$P_RESET"
+}
+
+function pnn() {
+	echo -ne "$P_RESET$@"
+}
+
+function prn() {
+	echo -ne "$P_RED$@$P_RESET"
+}
+
+function pgn() {
+	echo -ne "$P_GREEN$@$P_RESET"
+}
+
+function exitbuild() {
+	if [ "x$SOURCED" == "x1" ]; then
+		return 1
+	else
+		exit 1
+	fi
+}
+
+### OPTIONS ###
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+DATA_AVAIL=false
+BACKUP=false
+BACKUP_DIR="$S3_SOURCE/backups/backup_$DATE"
+NO_UPDATE=false
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`printf "%s" ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`printf "%s" $STRIP | cut -b 3-`
+		STRIP=`printf "%s" $STRIP | cut -b 1-2`
+	fi
+	
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	elif [ "x$STRIP" == "x-b" ]; then
+		BACKUP=true
+	elif [ "x$STRIP" == "x-n" ]; then
+		NO_UPDATE=true
+	elif [ "x$STRIP" == "x-d" ]; then
+		COUNT=$((COUNT+1))
+		BACKUP_DIR=${ARGV[COUNT]}
+		if [ "x$OUTPUT" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+pl
+pg "IOT Cloud Sync v$SCRIPT_VERSION"
+pl
+
+if [ "$HELP" == "true" ]; then
+	pn "Usage:"
+	pl
+	pn "iot-cloud-sync [-v] [-h]"
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
+	pn "-n (--no-update)   Only run backup"
+	pn "-b (--backup)      Backup cloud before update"
+	pn "-d (--dir)         Backup directory (default: $BACKUP_DIR)"
+	pl
+	exitbuild
+fi
+
+pg ":: ENVIRONMENT SETUP ::"
+pl
+
+pnn "- Running as user : "
+pg $SUDO_USER
+
+pnn "- Running with SUDO : "
+ID=$(id -u)
+if [ "x$ID" == "x0" ]; then
+    pg "YES"
+else
+    pr "NO"
+    exitbuild
+fi
+
+pnn "- Disabling automount : "
+gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
+pg "DONE"
+
+pnn "- Installing missing components : "
+run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ffmpeg ntpdate
+run apt-get install -y python3-pip
+run python3 -m pip install --upgrade pip
+run python3 -m pip install s3cmd
+pg "DONE"
+
+pnn "- NTP Syncing clock : "
+run ntpdate ntp.is.co.za
+pg "DONE"
+
+
+if [ "x$BACKUP" == "xtrue" ]; then
+        pl
+        pg ":: CLOUD BACKUP ::"
+        pl
+        pn "You are about to make a backup of the cloud to: $BACKUP_DIR"
+        pl
+        pr "Are you sure you want to backup IOT data from the cloud?"
+        pl
+        pnn "Type 'cloud backup ok' and Enter to continue : "
+        read SELECT
+
+        if [ "x$SELECT" != "xcloud backup ok" ]; then
+                pl
+                pr "Cloud backup aborted"
+                exit 1
+        fi
+
+        pl
+        pg "Creating local backup ..."
+        pl
+
+	echo "[$(date)] Backup Started OK" >> $LOG
+
+        run s3cmd --config $S3_ALL --no-check-md5 sync --no-preserve $S3_DEVICE_UL/ $BACKUP_DIR/
+	RET=$?
+	if [ $RET -ne 0 ]; then
+		pl
+		pr "Device upload files: backup failed (Ret: $RET)"
+		exit 1
+	fi
+        run s3cmd --config $S3_ALL --no-check-md5 sync --no-preserve $S3_DEVICE_DL/ $BACKUP_DIR/
+	RET=$?
+	if [ $RET -ne 0 ]; then
+		pl
+		pr "Device download files: backup failed (Ret: $RET)"
+		exit 1
+	fi
+
+        pl
+        pg "DONE"
+
+	exit 0
+fi
+
+if [ "x$NO_UPDATE" == "xtrue" ]; then
+	exit 0
+fi
+
+
+pl
+pg ":: CLOUD SYNC ::"
+pl
+pn "Publish specific customer site settings. Are you sure?"
+
+pnn "Type 'cloud sync ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xcloud sync ok" ]; then
+	pl
+	pr "Cloud update aborted"
+	exit 1
+fi
+pl
+
+echo "[$(date)] SITE CLOUD SYNC ONLY" >> $LOG
+
+pl
+pn "The following site operations can take minutes to hours depending on"
+pn "the internet speed and amount of data involved. Please be very"
+pn "patient, there is no way to make it go faster. If it fails, that means"
+pn "Amazon S3 returned an error, which means we have to retry the"
+pn "operation until it succeeds, or check internet."
+
+pn
+pg ":: CUSTOMER SELECTION ::"
+pn
+
+CUST_LIST=($(ls $S3_SOURCE | grep cust-))
+CUST_LIST_MAX=${#CUST_LIST[@]}
+SELECT=$CUST_LIST_MAX
+ITER=0
+
+while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+
+	if [ $ITER -ne 0 ]; then
+		pl
+		pr "Error: Your choice is invalid!\n"
+		pl
+	fi 
+
+	COUNT=0
+	while [ $COUNT -lt $CUST_LIST_MAX ]; do
+		pn "[$((COUNT + 1))] ${CUST_LIST[$COUNT]}"
+		COUNT=$((COUNT + 1))
+	done
+
+	read -n 1 -s SELECT
+	SELECT=$((SELECT - 1))
+	ITER=$((ITER + 1))
+done
+CUST=${CUST_LIST[$SELECT]}
+
+pn
+pg ":: SITE SELECTION ::"
+pn
+
+SITE_LIST=($(ls $S3_SOURCE/$CUST | grep site-))
+SITE_LIST_MAX=${#SITE_LIST[@]}
+SELECT=$SITE_LIST_MAX
+ITER=0
+
+while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+
+	if [ $ITER -ne 0 ]; then
+		pl
+		pr "Error: Your choice is invalid!\n"
+		pl
+	fi 
+
+	COUNT=0
+	while [ $COUNT -lt $SITE_LIST_MAX ]; do
+		pn "[$((COUNT + 1))] ${SITE_LIST[$COUNT]}"
+		COUNT=$((COUNT + 1))
+	done
+
+	read -n 1 -s SELECT
+	SELECT=$((SELECT - 1))
+	ITER=$((ITER + 1))
+done
+SITE=${SITE_LIST[$SELECT]}
+	
+pl
+pg "Processing customer : $CUST"
+
+echo "[$(date)] Customer: $CUST" >> $LOG
+
+
+pn "Processing site : $SITE"
+
+mkdir -p /tmp/testyaml
+/lib/netplan/generate -r /tmp/testyaml $S3_SOURCE/$CUST/$SITE/settings/.wifi
+RET=$?
+if [ $RET -ne 0 ]; then
+	pr "FAIL"
+	pl
+	pr "Wifi settings invalid ($CUST/$SITE/settings/.wifi)"
+	
+	echo "[$(date)] Wifi settings invalid ($CUST/$SITE/settings/.wifi)" >> $LOG
+	
+	exit 1
+fi
+rm -rf /tmp/testyaml
+
+S=$(du -hs --block-size=1M $S3_SOURCE/$CUST/$SITE/playlists | sed -n 's/^\([0-9.]*\).*/\1/p')
+if [ $S -gt 8192 ]; then
+	pr "FAIL"
+	pl
+	pr "Playlists exceed 8GB ($CUST/$SITE/playlists)"
+	
+	echo "[$(date)] Playlists exceed 8GB ($CUST/$SITE/playlists)" >> $LOG
+	
+	exit 1
+fi
+
+
+pn "Uploading settings and music ..."	
+
+echo "[$(date)] Site: $SITE" >> $LOG
+
+MUSIC_UPDATE=$(s3cmd -v --config $S3_ALL --no-check-md5 sync --no-preserve --exclude='*' --include='playlist-*/*' --delete-removed $S3_SOURCE/$CUST/$SITE/playlists/ $S3_MUSIC_SITE/$CUST/$SITE/playlists/ 2>&1)
+MUSIC_UPDATE_RET=$?
+
+run echo "================="
+run echo "$MUSIC_UPDATE"
+run echo "================="
+
+if [ $MUSIC_UPDATE_RET -ne 0 ]; then
+	pl
+	pr "MUSIC: Upload failed (Ret: $MUSIC_UPDATE_RET)"
+	exit 1
+fi		
+
+#INFO: Summary: 0 local files to upload, 0 files to remote copy, 0 remote files to delete
+M1=$(echo $MUSIC_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
+M2=$(echo $MUSIC_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
+M3=$(echo $MUSIC_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
+
+echo "[$(date)] Music OK [$M1,$M2,$M3]" >> $LOG
+
+SETTINGS_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $S3_SOURCE/$CUST/$SITE/settings/ $S3_SETTINGS_SITE/$CUST/$SITE/settings/ 2>&1)
+SETTINGS_UPDATE_RET=$?
+
+run echo "================="
+run echo "$SETTINGS_UPDATE"
+run echo "================="
+
+if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
+	pl
+	pr "SETTINGS: Upload failed (Ret: $SETTINGS_UPDATE_RET)"
+	exit 1
+fi		
+
+#INFO: Summary: 0 local files to upload, 0 files to remote copy, 0 remote files to delete
+S1=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
+S2=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
+S3=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
+
+echo "[$(date)] Settings OK [$S1,$S2,$S3]" >> $LOG
+echo "[$(date)] Current Version: $(cat $S3_SOURCE/$CUST/$SITE/settings/.version)" >> $LOG
+
+if [ "x$M1" != "x0" ] || [ "x$M2" != "x0" ] || [ "x$M3" != "x0" ] || [ "x$S1" != "x0" ] || [ "x$S2" != "x0" ] || [ "x$S3" != "x0" ]; then
+	pl
+	pg "UPDATE detected for $CUST - $SITE"
+	pg "INCEMENTING version"
+	pl
+
+
+	echo "[$(date)] Update Detected [$M1,$M2,$M3,$S1,$S2,$S3]" >> $LOG
+
+	VER=$(cat $S3_SOURCE/$CUST/$SITE/settings/.version)
+	VER=$((VER + 1))
+	echo $VER > $S3_SOURCE/$CUST/$SITE/settings/.version
+	run s3cmd -v --config $S3_ALL sync --no-preserve $S3_SOURCE/$CUST/$SITE/settings/ $S3_SETTINGS_SITE/$CUST/$SITE/settings/
+	RET=$?
+	if [ $RET -ne 0 ]; then
+		pl
+		pr "SETTINGS: Failure to upload (Ret: $RET)"
+		exit 1
+	fi	
+
+	echo "[$(date)] New Version: $(cat $S3_SOURCE/$CUST/$SITE/settings/.version)" >> $LOG
+fi
+
+# Make sure stats dir exist
+mkdir -p $S3_SOURCE/$CUST/$SITE/
+if [ ! -f $S3_SOURCE/$CUST/$SITE/.commissioned ]; then
+	touch $S3_SOURCE/$CUST/$SITE/.commissioned
+	run s3cmd -v --config $S3_ALL put --no-preserve $S3_SOURCE/$CUST/$SITE/.commissioned $S3_STATS_SITE/$CUST/$SITE/
+fi
+	
+pg "DONE"
+pl
+
+
+
+
+
