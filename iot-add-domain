@@ -82,17 +82,14 @@ fi
 #----------------------------------------------------#
 
 pn
-pg ":: Environment Setup ::"
+pg ":: Setup & Checks ::"
 pn
 
 common_setup
 
 log "Common Setup OK"
 
-pl
-pg ":: Admin Check ::"
-pl
-pnn "- Admin : "
+pnn "- Admin permissions enabled : "
 if [ "x$(admin)" == "x1" ]; then
 	pg "Yes"
 else
@@ -121,7 +118,10 @@ fi
 log "Confirmation granted"
 
 pl
-pn "A domain consist of a Customer ID and a Site ID. It is"
+pg ":: Add Domain ::"
+pl
+
+pn "A domain consists of a Customer ID and a Site ID. It is"
 pn "possible for multiple Site IDs to be associated with a"
 pn "single Customer ID, not the other way around. Do you"
 pn "want to create a new Customer ID first, or do you want"
@@ -131,7 +131,10 @@ pl
 pnn "Create new Customer ID? [y, N] "
 read -n1 -s SELECT
 pl
+
 if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
+	log "Creating Customer ID"   
+
 	pnn "Specify Customer ID : cust-"
 	read CUST
 	CUST=cust-$CUST
@@ -150,6 +153,7 @@ if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 		exit 1
 	fi
 else
+	log "Selecting Customer ID"   
 
 	CUST_LIST=($(ls $MASTER_DB | grep cust-))
 	CUST_LIST_MAX=${#CUST_LIST[@]}
@@ -160,48 +164,59 @@ else
 	
 		if [ $ITER -ne 0 ]; then
 			pl
-			pr "Error: Your choice is invalid!\n"
+			pr "Error: Your choice is invalid!"
 			pl
 		fi 
 	
+		pn "Please select the Customer ID from the list:"
 		COUNT=0
 		while [ $COUNT -lt $CUST_LIST_MAX ]; do
-			pn "[$((COUNT + 1))] ${CUST_LIST[$COUNT]}"
+			pn "[$(printf "%2d" $((COUNT + 1)))] ${CUST_LIST[$COUNT]}"
 			COUNT=$((COUNT + 1))
 		done
 	
-		read -n 1 -s SELECT
+		pl
+		pnn "Choice? : "
+		read SELECT
 		SELECT=$((SELECT - 1))
 		ITER=$((ITER + 1))
 	done
 	CUST=${CUST_LIST[$SELECT]}
 fi
 
-## SITE
-
 pl
-pgn "Create new customer site in database? [y, N] (alternatively use existing)"
+pn "If you select an existing Site ID, all the settings for"
+pn "the domain will be reset to defaults. Note that default"
+pn "settings (and payload) is not sufficient and requires"
+pn "manually tweaking some details (e.g. WIFI details)."
+pl
+
+pnn "Create new Site ID? [y, N] "
 read -n1 -s SELECT
 pl
+
 if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
-	pgn "Specify customer site name : [site-]"
+	log "Creating Site ID"   
+
+	pgn "Specify Site ID : site-"
 	read SITE
 	SITE=site-$SITE
 
 	if [ "x$SITE" == "x" ]; then
 		pl
-		pr "Empty customer site cannot be created"
+		pr "Empty Site ID suffix is not allowed"
 		pl
-		continue
+		exit 1
 	fi
 
 	if [ -d $MASTER_DB/$CUST/$SITE ]; then
 		pl
-		pr "Customer site cannot be created, it already exists ($SITE)"
+		pr "Site ID cannot be created, it already exists ($SITE)"
 		pl
-		continue
+		exit 1
 	fi
 else
+	log "Selecting Site ID"   
 
 	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site-))
 	SITE_LIST_MAX=${#SITE_LIST[@]}
@@ -212,34 +227,36 @@ else
 	
 		if [ $ITER -ne 0 ]; then
 			pl
-			pr "Error: Your choice is invalid!\n"
+			pr "Error: Your choice is invalid!"
 			pl
 		fi 
 	
+		pn "Please select the Site ID from the list:"
 		COUNT=0
 		while [ $COUNT -lt $SITE_LIST_MAX ]; do
-			pn "[$((COUNT + 1))] ${SITE_LIST[$COUNT]}"
+			pn "[$(printf "%2d" $((COUNT + 1)))] ${SITE_LIST[$COUNT]}"
 			COUNT=$((COUNT + 1))
 		done
-	
-		read -n 1 -s SELECT
+
+		pl	
+		pnn "Choice? : "
+		read SELECT
 		SELECT=$((SELECT - 1))
 		ITER=$((ITER + 1))
 	done
 	SITE=${SITE_LIST[$SELECT]}
 fi
 
-## CONFIRM
+pl
+pg ":: Final Confirmation ::"
+pl
 
+pn "The following domain will be created or reset:"
 pl
-pg "You have selected the following details:"
-pl
-pnn "- Customer selected : "
+pnn "Customer ID : "
 pg $CUST
-pnn "- Site selected : "
+pnn "Site ID : "
 pg $SITE
-pl
-pr "Do you want to go ahead ?"
 pl
 pnn "Type 'ok' and Enter to continue : "
 read SELECT
@@ -250,24 +267,22 @@ if [ "x$SELECT" != "xok" ]; then
 	exit 1
 fi
 
+log "Adding or Resetting Customer ID: $CUST, Site ID: $SITE"
 
-echo "[$(date)] Add/Modify Creating [$CUST, $SITE]" >> $LOG
 
 pl
-pnn "- Creating directory structure : "
+pg ":: Performing Actions ::"
+pl
+
+pnn "- Creating domain directory structure : "
 mkdir -p $MASTER_DB/$CUST/$SITE/payload
 echo "Empty payload area" > $MASTER_DB/$CUST/$SITE/payload/README
 mkdir -p $MASTER_DB/$CUST/$SITE/settings
+pg "Done"
 
+pnn "- Applying default settings : "
 run tar xvzf $CPWD/firmware/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
-
 pg "Done"
 
 pl
-pg "Customer/Site update complete."
-pl
-pg "Please update the files under : $CUST/$SITE/settings/"
-pl
-pnn "Press any key to continue"
-read -n1 -s SELECT
-
+pn "Domain Created/Reset"
