@@ -12,7 +12,7 @@ source $CPWD/common/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/add-domain.log
+LOG=$MASTER_DB/iot-domain-create.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,7 +57,7 @@ done
 log "Started"
 
 pl
-pg "iot-add-domain ($VERSION)"
+pg "iot-domain-create ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
@@ -67,7 +67,7 @@ if [ "$HELP" == "true" ]; then
         pn "operational domain for devices, with its own settings and"
         pn "payload."
         pl
-	pn "iot-add-domain [-v] [-h] ..."
+	pn "iot-domain-create [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl

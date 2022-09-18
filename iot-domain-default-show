@@ -1,0 +1,129 @@
+#!/bin/bash -e
+
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#----------------------------------------------------#
+# COMMON ATTRIBUTES                                  #
+#----------------------------------------------------#
+
+source $CPWD/common/iot-utils
+
+#----------------------------------------------------#
+# DEFINES / MACROS                                   #
+#----------------------------------------------------#
+
+LOG=$MASTER_DB/iot-domain-default-show.log
+
+#----------------------------------------------------#
+# CMDLINE OPTIONS                                    #
+#----------------------------------------------------#
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+log "Started"
+
+pl
+pg "iot-domain-default-show ($VERSION)"
+
+if [ "$HELP" == "true" ]; then
+        pl
+	pn "Usage:"
+	pl
+        pn "Show the default domain used by tools such as"
+	pn "iot-cloud-sync and others"
+        pl
+	pn "iot-domain-default-show [-v] [-h] ..."
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
+	pl
+	exit 1
+fi
+
+#----------------------------------------------------#
+# PREPARE                                            #
+#----------------------------------------------------#
+
+pn
+pg ":: Setup & Checks ::"
+pn
+
+common_setup
+
+log "Common Setup OK"
+
+#----------------------------------------------------#
+# BODY                                               #
+#----------------------------------------------------#
+
+pl
+pg ":: Show Default Domain ::"
+pl
+
+pn "A domain consists of a Customer ID and a Site ID. Setting"
+pn "a default domain provides a safe way for operations to only"
+pn "affect the intended domain."
+pl
+
+pn "The following Customer ID and Site ID is the default domain:"
+
+DOMAIN=$(domain)
+if [ -z "$DOMAIN" ]; then
+	pl
+	pr "Error: No default domain is set. Please set it first"
+	pl
+	exit 1
+fi
+if [ ! -d $MASTER_DB/$DOMAIN ]; then
+	pl
+	pr "Error: Domain does not exist. Please create it first."
+	pl
+	exit 1
+fi
+
+CUST=$(dirname $DOMAIN)
+SITE=$(basename $DOMAIN)
+
+pl
+pnn "Customer ID : "
+pg $CUST
+pnn "Site ID : "
+pg $SITE
+
+pl

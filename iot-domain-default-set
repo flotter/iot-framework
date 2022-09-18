@@ -1,0 +1,219 @@
+#!/bin/bash -e
+
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#----------------------------------------------------#
+# COMMON ATTRIBUTES                                  #
+#----------------------------------------------------#
+
+source $CPWD/common/iot-utils
+
+#----------------------------------------------------#
+# DEFINES / MACROS                                   #
+#----------------------------------------------------#
+
+LOG=$MASTER_DB/iot-domain-default-set.log
+
+#----------------------------------------------------#
+# CMDLINE OPTIONS                                    #
+#----------------------------------------------------#
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+log "Started"
+
+pl
+pg "iot-domain-default-set ($VERSION)"
+
+if [ "$HELP" == "true" ]; then
+        pl
+	pn "Usage:"
+	pl
+        pn "Set the default domain used by tools such as"
+	pn "iot-cloud-sync and others"
+        pl
+	pn "iot-domain-default-set [-v] [-h] ..."
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
+	pl
+	exit 1
+fi
+
+#----------------------------------------------------#
+# PREPARE                                            #
+#----------------------------------------------------#
+
+pn
+pg ":: Setup & Checks ::"
+pn
+
+common_setup
+
+log "Common Setup OK"
+
+#----------------------------------------------------#
+# BODY                                               #
+#----------------------------------------------------#
+
+pl
+pg ":: Set Default Domain ::"
+pl
+
+pn "A domain consists of a Customer ID and a Site ID. Setting"
+pn "a default domain provides a safe way for operations to only"
+pn "affect the intended domain."
+pl
+
+log "Selecting Customer ID"   
+
+mkdir -p $MASTER_DB
+CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
+CUST_LIST_MAX=${#CUST_LIST[@]}
+SELECT=$CUST_LIST_MAX
+ITER=0
+
+while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+                
+	if [ $CUST_LIST_MAX -eq 0 ]; then
+		break
+                fi
+
+	if [ $ITER -ne 0 ]; then
+		pl
+		pr "Error: Your choice is invalid!"
+		pl
+	fi 
+
+	pn "Please select the Customer ID from the list:"
+	COUNT=0
+	while [ $COUNT -lt $CUST_LIST_MAX ]; do
+		pn "[$(printf "%2d" $((COUNT + 1)))] ${CUST_LIST[$COUNT]}"
+		COUNT=$((COUNT + 1))
+	done
+
+	pl
+	pnn "Choice? : "
+	read SELECT
+	SELECT=$((SELECT - 1))
+	ITER=$((ITER + 1))
+done
+CUST=${CUST_LIST[$SELECT]}
+		
+if [ -z "$CUST" ]; then
+	pl
+	pr "Error: No valid Customer ID found! Please create a new Customer ID"
+	pl
+	exit 1
+fi 
+
+log "Selecting Site ID"   
+mkdir -p $MASTER_DB/$CUST
+SITE_LIST=($(ls $MASTER_DB/$CUST | grep site- || true))
+SITE_LIST_MAX=${#SITE_LIST[@]}
+SELECT=$SITE_LIST_MAX
+ITER=0
+
+while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+
+                if [ $SITE_LIST_MAX -eq 0 ]; then
+		break
+                fi
+
+	if [ $ITER -ne 0 ]; then
+		pl
+		pr "Error: Your choice is invalid!"
+		pl
+	fi 
+
+	pn "Please select the Site ID from the list:"
+	COUNT=0
+	while [ $COUNT -lt $SITE_LIST_MAX ]; do
+		pn "[$(printf "%2d" $((COUNT + 1)))] ${SITE_LIST[$COUNT]}"
+		COUNT=$((COUNT + 1))
+	done
+
+	pl	
+	pnn "Choice? : "
+	read SELECT
+	SELECT=$((SELECT - 1))
+	ITER=$((ITER + 1))
+done
+SITE=${SITE_LIST[$SELECT]}
+
+if [ -z "$SITE" ]; then
+	pl
+	pr "Error: No valid Site ID found! Please create a new Site ID"
+	pl
+	exit 1
+fi 
+
+pl
+pg ":: Final Confirmation ::"
+pl
+
+pn "Set the following Customer ID and Site ID as the default domain:"
+
+pl
+pnn "Customer ID : "
+pg $CUST
+pnn "Site ID : "
+pg $SITE
+pl
+pnn "Type 'ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xok" ]; then
+	pl
+	pr "Add aborted"
+	exit 1
+fi
+
+log "Default domain set to Customer ID: $CUST, Site ID: $SITE"
+
+pl
+pg ":: Performing Actions ::"
+pl
+
+pnn "- Setting default domain : "
+sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
+echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
+pg "Done"
+
+pl

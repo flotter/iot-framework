@@ -84,6 +84,12 @@ common_setup() {
         mkdir -p $(dirname $TOOL_SETTINGS)
         touch $TOOL_SETTINGS
         if [ -v IOT_DOMAIN ]; then
+                if [ ! -d $MASTER_DB/$IOT_DOMAIN ]; then
+			pr "Fail"
+			pl
+			pr "Domain does not exist. Please create it first."
+			exit 1
+		fi
         	sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
                 echo "IOT_DOMAIN=$IOT_DOMAIN" >> $TOOL_SETTINGS
 	fi
@@ -120,13 +126,13 @@ common_setup() {
 
 admin() {
 	if [ -f $TOOL_SETTINGS ]; then
-		cat $TOOL_SETTINGS | grep "^IOT_ADMIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs
+		cat $TOOL_SETTINGS | grep "^IOT_ADMIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
 	fi
 }
 
 domain() {
 	if [ -f $TOOL_SETTINGS ]; then
-		cat $TOOL_SETTINGS | grep "^IOT_DOMAIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs
+		cat $TOOL_SETTINGS | grep "^IOT_DOMAIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
 	fi
 }
 
