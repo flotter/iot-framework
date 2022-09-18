@@ -155,12 +155,17 @@ if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 else
 	log "Selecting Customer ID"   
 
-	CUST_LIST=($(ls $MASTER_DB | grep cust-))
+	mkdir -p $MASTER_DB
+	CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
 	CUST_LIST_MAX=${#CUST_LIST[@]}
 	SELECT=$CUST_LIST_MAX
 	ITER=0
 	
 	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+                
+		if [ $CUST_LIST_MAX -eq 0 ]; then
+			break
+                fi
 	
 		if [ $ITER -ne 0 ]; then
 			pl
@@ -183,6 +188,13 @@ else
 	done
 	CUST=${CUST_LIST[$SELECT]}
 fi
+		
+if [ -z "$CUST" ]; then
+	pl
+	pr "Error: No valid Customer ID found! Please create a new Customer ID"
+	pl
+	exit 1
+fi 
 
 pl
 pn "If you select an existing Site ID, all the settings for"
@@ -198,11 +210,11 @@ pl
 if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 	log "Creating Site ID"   
 
-	pgn "Specify Site ID : site-"
+	pnn "Specify Site ID : site-"
 	read SITE
 	SITE=site-$SITE
 
-	if [ "x$SITE" == "x" ]; then
+	if [ "x$SITE" == "xsite-" ]; then
 		pl
 		pr "Empty Site ID suffix is not allowed"
 		pl
@@ -217,13 +229,17 @@ if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 	fi
 else
 	log "Selecting Site ID"   
-
-	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site-))
+	mkdir -p $MASTER_DB/$CUST
+	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site- || true))
 	SITE_LIST_MAX=${#SITE_LIST[@]}
 	SELECT=$SITE_LIST_MAX
 	ITER=0
-	
+
 	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+
+                if [ $SITE_LIST_MAX -eq 0 ]; then
+			break
+                fi
 	
 		if [ $ITER -ne 0 ]; then
 			pl
@@ -247,11 +263,27 @@ else
 	SITE=${SITE_LIST[$SELECT]}
 fi
 
+if [ -z "$SITE" ]; then
+	pl
+	pr "Error: No valid Site ID found! Please create a new Site ID"
+	pl
+	exit 1
+fi 
+
 pl
 pg ":: Final Confirmation ::"
 pl
 
-pn "The following domain will be created or reset:"
+if [ -d $MASTER_DB/$CUST/$SITE ]; then
+	pn "The following domain already exist and will be reset:"
+
+	log "Domain exist and will be reset"
+else
+	pn "The following domain will be created:"
+
+	log "Domain will be created"
+fi
+
 pl
 pnn "Customer ID : "
 pg $CUST
@@ -269,7 +301,6 @@ fi
 
 log "Adding or Resetting Customer ID: $CUST, Site ID: $SITE"
 
-
 pl
 pg ":: Performing Actions ::"
 pl
@@ -283,6 +314,4 @@ pg "Done"
 pnn "- Applying default settings : "
 run tar xvzf $CPWD/firmware/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
 pg "Done"
-
 pl
-pn "Domain Created/Reset"
