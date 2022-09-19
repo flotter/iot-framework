@@ -90,12 +90,8 @@ common_setup
 log "Common Setup OK"
 
 pnn "- Admin permissions enabled : "
-if [ "x$(admin)" == "x1" ]; then
-	pg "Yes"
-else
-	pr "No"
-	exit 1
-fi
+admin_check
+pg "Yes"
 
 log "Admin OK"
 

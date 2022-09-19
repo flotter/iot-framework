@@ -12,7 +12,7 @@ source $CPWD/common/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-default-set.log
+LOG=$MASTER_DB/iot-device-default-set.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,16 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-default-set ($VERSION)"
+pg "iot-device-default-set ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Set the default domain used by tools such as"
-	pn "iot-cloud-sync and others"
+        pn "Set the default device used while preparing firmware."
         pl
-	pn "iot-domain-default-set [-v] [-h] ..."
+	pn "iot-device-default-set [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -93,27 +92,26 @@ log "Common Setup OK"
 #----------------------------------------------------#
 
 pl
-pg ":: Set Default Domain ::"
+pg ":: Set Default Device ::"
 pl
 
-pn "A domain consists of a Customer ID and a Site ID. Setting"
-pn "a default domain provides a safe way for operations to only"
-pn "affect the intended domain."
+pn "A device is a collection of board specific attributes."
+pn "To verify and use various firmware attributes, we need"
+pn "know some board specific details. This option sets the"
+pn "device so subsequent operations know which board to use."
 pl
 
-select_domain
+select_device
 
 pl
 pg ":: Final Confirmation ::"
 pl
 
-pn "Set the following Customer ID and Site ID as the default domain:"
+pn "Set the following device as the default:"
 
 pl
-pnn "Customer ID : "
-pg $CUST
-pnn "Site ID : "
-pg $SITE
+pnn "Device : "
+pg $DEVICE
 pl
 pnn "Type 'ok' and Enter to continue : "
 read SELECT
@@ -124,15 +122,15 @@ if [ "x$SELECT" != "xok" ]; then
 	exit 1
 fi
 
-log "Default domain set to Customer ID: $CUST, Site ID: $SITE"
-
 pl
 pg ":: Performing Actions ::"
 pl
 
-pnn "- Setting default domain : "
-sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
-echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
+pnn "- Setting default device : "
+sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
+echo "IOT_DEVICE=$DEVICE" >> $TOOL_SETTINGS
 pg "Done"
+
+log "Default device set to $DEVICE"
 
 pl

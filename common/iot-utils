@@ -12,6 +12,9 @@ fi
 
 DATE=$(date +"%d_%m_%y__%H_%M_%S")
 
+# MiB
+FIRMWARE_PAYLOAD_MAX_SIZE=32
+
 #----------------------------------------------------#
 # LOCAL DIRECTORIES                                  #
 #----------------------------------------------------#
@@ -79,8 +82,8 @@ run() {
 #----------------------------------------------------#
 
 common_setup() {
-	
-        pnn "- Apply settings : "
+
+        pnn "- Apply environment override settings : "
         mkdir -p $(dirname $TOOL_SETTINGS)
         touch $TOOL_SETTINGS
         if [ -v IOT_DOMAIN ]; then
@@ -92,6 +95,16 @@ common_setup() {
 		fi
         	sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
                 echo "IOT_DOMAIN=$IOT_DOMAIN" >> $TOOL_SETTINGS
+	fi
+        if [ -v IOT_DEVICE ]; then
+                if [ ! -d $REPO_ROOT/firmware/$IOT_DEVICE ]; then
+			pr "Fail"
+			pl
+			pr "Support for device $IOT_DEVICE does not exist. Did you spell it correctly?"
+			exit 1
+		fi
+        	sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
+                echo "IOT_DEVICE=$IOT_DEVICE" >> $TOOL_SETTINGS
 	fi
         if [ -v IOT_ADMIN ]; then
         	sed -i '/IOT_ADMIN/d' $TOOL_SETTINGS
@@ -110,31 +123,23 @@ common_setup() {
 	    pr "No"
 	    exit 1
 	fi
-
-	pnn "- Disabling automount : "
-	gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
-	pg "Done"
 	
 	pnn "- Installing missing components : "
-	run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev
+	run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ntpdate
 	run apt-get install -y python3-pip
 	run python3 -m pip install --upgrade pip
 	run python3 -m pip install s3cmd
 	pg "Done"
-
+	
+	pnn "- NTP Syncing clock : "
+	run ntpdate ntp.is.co.za
+	pg "Done"
+	
+	pnn "- Disabling automount : "
+	gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
+	pg "Done"
 }
 
-admin() {
-	if [ -f $TOOL_SETTINGS ]; then
-		cat $TOOL_SETTINGS | grep "^IOT_ADMIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
-	fi
-}
-
-domain() {
-	if [ -f $TOOL_SETTINGS ]; then
-		cat $TOOL_SETTINGS | grep "^IOT_DOMAIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
-	fi
-}
 
 #----------------------------------------------------#
 # VERSIONING                                         #
@@ -177,3 +182,212 @@ S3_DEVICE_FW="s3://iot-device-fw"
 S3_DEVICE_DL="s3://iot-device-download"
 S3_DEVICE_UL="s3://iot-device-upload"
 
+#----------------------------------------------------#
+# COMMON CHECKS                                      #
+#----------------------------------------------------#
+
+admin() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_ADMIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
+	fi
+}
+
+admin_check() {
+	if [ "x$(admin)" != "x1" ]; then
+		pr "No"
+		exit 1
+	fi
+}
+
+domain() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_DOMAIN=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
+	fi
+}
+
+domain_check() {
+	if [ -z "$(domain)" ]; then
+		pr "Fail"
+	        pl
+	        pr "Error: No default domain is set. Please set it first"
+	        pl
+	        exit 1
+	fi
+	if [ ! -d "$MASTER_DB/$(domain)" ]; then
+		pr "Fail"
+	        pl
+	        pr "Error: Domain does not exist. Please check the spelling."
+	        pl
+	        exit 1
+	fi
+}
+
+device() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_DEVICE=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
+	fi
+}
+
+device_check() {
+	if [ -z "$(device)" ]; then
+		pr "Fail"
+	        pl
+	        pr "Error: No default device is set. Please set it first"
+	        pl
+	        exit 1
+	fi
+	if [ ! -d "$REPO_ROOT/firmware/$(device)" ]; then
+		pr "Fail"
+	        pl
+	        pr "Error: Device does not exist. Please check the spelling."
+	        pl
+	        exit 1
+	fi
+}
+
+netplan_verify() {
+	local NPVER=$(mktemp -d)
+	/lib/netplan/generate -r $NPVER $MASTER_DB/$1/$2/settings/.wifi
+	RET=$?
+
+	rm -rf $NPVER
+
+	if [ $RET -ne 0 ]; then
+	        pr "Fail"
+	        pl
+	        pr "Wifi settings invalid ($1/$2/settings/.wifi)"
+	        log "Wifi settings invalid ($1/$2/settings/.wifi)"
+	
+	        exit 1
+	fi
+}
+
+select_domain() {
+	
+	log "Selecting Customer ID"
+	
+	mkdir -p $MASTER_DB
+	CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
+	CUST_LIST_MAX=${#CUST_LIST[@]}
+	SELECT=$CUST_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
+	
+	        if [ $CUST_LIST_MAX -eq 0 ]; then
+	                break
+	                fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select the Customer ID from the list:"
+	        COUNT=0
+	        while [ $COUNT -lt $CUST_LIST_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${CUST_LIST[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	CUST=${CUST_LIST[$SELECT]}
+	
+	if [ -z "$CUST" ]; then
+	        pl
+	        pr "Error: No valid Customer ID found! Please create a new Customer ID"
+	        pl
+	        exit 1
+	fi
+	log "Selecting Site ID"
+	mkdir -p $MASTER_DB/$CUST
+	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site- || true))
+	SITE_LIST_MAX=${#SITE_LIST[@]}
+	SELECT=$SITE_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
+	
+	                if [ $SITE_LIST_MAX -eq 0 ]; then
+	                break
+	                fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select the Site ID from the list:"
+	        COUNT=0
+	        while [ $COUNT -lt $SITE_LIST_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${SITE_LIST[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	SITE=${SITE_LIST[$SELECT]}
+	
+	if [ -z "$SITE" ]; then
+	        pl
+	        pr "Error: No valid Site ID found! Please create a new Site ID"
+	        pl
+	        exit 1
+	fi
+}
+
+select_device() {
+	
+	log "Selecting Device"
+	
+	mkdir -p $REPO_ROOT/firmware
+	DEVICE_LIST=($(ls $REPO_ROOT/firmware | grep device- || true))
+	DEVICE_LIST_MAX=${#DEVICE_LIST[@]}
+	SELECT=$DEVICE_LIST_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $DEVICE_LIST_MAX ] ; do
+	
+	        if [ $DEVICE_LIST_MAX -eq 0 ]; then
+	                break
+	                fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select the device from the list:"
+	        COUNT=0
+	        while [ $COUNT -lt $DEVICE_LIST_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${DEVICE_LIST[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	DEVICE=${DEVICE_LIST[$SELECT]}
+	
+	if [ -z "$DEVICE" ]; then
+	        pl
+	        pr "Error: No valid device found! Internal error."
+	        pl
+	        exit 1
+	fi
+}

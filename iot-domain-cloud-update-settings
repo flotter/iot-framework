@@ -12,7 +12,7 @@ source $CPWD/common/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-default-set.log
+LOG=$MASTER_DB/iot-domain-cloud-update-settings.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,16 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-default-set ($VERSION)"
+pg "iot-domain-cloud-update-settings ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Set the default domain used by tools such as"
-	pn "iot-cloud-sync and others"
+        pn "Upload the domain settings to the cloud."
         pl
-	pn "iot-domain-default-set [-v] [-h] ..."
+	pn "iot-domain-cloud-update-settings [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -88,51 +87,45 @@ common_setup
 
 log "Common Setup OK"
 
+pnn "- Admin mode enabled : "
+ADMIN=$(admin)
+if [ "x$ADMIN" == "x1" ]; then
+	pg "Yes"
+else
+	pg "No"
+fi
+
 #----------------------------------------------------#
 # BODY                                               #
 #----------------------------------------------------#
 
 pl
-pg ":: Set Default Domain ::"
+pg ":: Upload Domain Settings ::"
 pl
 
-pn "A domain consists of a Customer ID and a Site ID. Setting"
-pn "a default domain provides a safe way for operations to only"
-pn "affect the intended domain."
-pl
-
-select_domain
-
-pl
-pg ":: Final Confirmation ::"
-pl
-
-pn "Set the following Customer ID and Site ID as the default domain:"
-
-pl
-pnn "Customer ID : "
-pg $CUST
-pnn "Site ID : "
-pg $SITE
-pl
-pnn "Type 'ok' and Enter to continue : "
-read SELECT
-
-if [ "x$SELECT" != "xok" ]; then
+DOMAIN=$(domain)
+if [ -z "$DOMAIN" ]; then
 	pl
-	pr "Add aborted"
+	pr "Error: No default domain is set. Please set it first"
+	pl
+	exit 1
+fi
+if [ ! -d $MASTER_DB/$DOMAIN ]; then
+	pl
+	pr "Error: Domain does not exist. Please create it first."
+	pl
 	exit 1
 fi
 
-log "Default domain set to Customer ID: $CUST, Site ID: $SITE"
+CUST=$(dirname $DOMAIN)
+SITE=$(basename $DOMAIN)
 
 pl
-pg ":: Performing Actions ::"
-pl
+pnn "Processing settings for Customer ID/Site ID : "
+pg $CUST/$SITE
 
-pnn "- Setting default domain : "
-sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
-echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
+pnn "Netplan config verify : "
+netplan_verify $CUST $SITE
 pg "Done"
 
 pl

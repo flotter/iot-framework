@@ -12,7 +12,7 @@ source $CPWD/common/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-default-set.log
+LOG=$MASTER_DB/iot-device-default-show.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,16 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-default-set ($VERSION)"
+pg "iot-device-default-show ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Set the default domain used by tools such as"
-	pn "iot-cloud-sync and others"
+        pn "Show the default device used while preparing firmware."
         pl
-	pn "iot-domain-default-set [-v] [-h] ..."
+	pn "iot-device-default-show [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -93,46 +92,32 @@ log "Common Setup OK"
 #----------------------------------------------------#
 
 pl
-pg ":: Set Default Domain ::"
+pg ":: Show Default Device ::"
 pl
 
-pn "A domain consists of a Customer ID and a Site ID. Setting"
-pn "a default domain provides a safe way for operations to only"
-pn "affect the intended domain."
+pn "A device is a collection of board specific attributes."
+pn "To verify and use various firmware attributes, we need"
+pn "know some board specific details. This option shows the"
+pn "device selected for firmware creation."
 pl
 
-select_domain
+pn "The selected default device:"
 
-pl
-pg ":: Final Confirmation ::"
-pl
-
-pn "Set the following Customer ID and Site ID as the default domain:"
-
-pl
-pnn "Customer ID : "
-pg $CUST
-pnn "Site ID : "
-pg $SITE
-pl
-pnn "Type 'ok' and Enter to continue : "
-read SELECT
-
-if [ "x$SELECT" != "xok" ]; then
+DEVICE=$(device)
+if [ -z "$DEVICE" ]; then
 	pl
-	pr "Add aborted"
+	pr "Error: No default device is set. Please set it first"
+	pl
+	exit 1
+fi
+if [ ! -d $REPO_ROOT/firmware/$DEVICE ]; then
+	pl
+	pr "Error: Device does not exist. Please check the spelling."
+	pl
 	exit 1
 fi
 
-log "Default domain set to Customer ID: $CUST, Site ID: $SITE"
-
 pl
-pg ":: Performing Actions ::"
-pl
-
-pnn "- Setting default domain : "
-sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
-echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
-pg "Done"
-
+pnn "Device : "
+pg $DEVICE
 pl
