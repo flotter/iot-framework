@@ -100,32 +100,96 @@ fi
 #----------------------------------------------------#
 
 pl
-pg ":: Upload Domain Settings ::"
+pg ":: Domain Selection ::"
 pl
 
 DOMAIN=$(domain)
-if [ -z "$DOMAIN" ]; then
-	pl
-	pr "Error: No default domain is set. Please set it first"
-	pl
-	exit 1
-fi
-if [ ! -d $MASTER_DB/$DOMAIN ]; then
-	pl
-	pr "Error: Domain does not exist. Please create it first."
-	pl
-	exit 1
+
+if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		CUST_WILDCARD="*** All Customers IDs and Site IDs (dangerous) ***"
+		select_domain_cust "$CUST_WILDCARD"
+		pl
+
+		if [ ! -z "$CUST" ]; then
+			SITE_WILDCARD="*** All Site IDs for selected Customer ID (dangerous) ***"
+			select_domain_site "$SITE_WILDCARD"
+			pl
+		else
+			SITE=
+		fi
+
+		domain_iterate
+	else
+		pl
+		pr "No default domain is set. Without Admin mode we cannot proceed."
+		pl
+		exit 1
+	fi
+else
+	# Single Default domain (Non-admin mode compatible)
+	DOMAINS=($DOMAIN)
+	pn "Default domain selected : $DOMAIN"
 fi
 
-CUST=$(dirname $DOMAIN)
-SITE=$(basename $DOMAIN)
 
 pl
-pnn "Processing settings for Customer ID/Site ID : "
-pg $CUST/$SITE
-
-pnn "Netplan config verify : "
-netplan_verify $CUST $SITE
-pg "Done"
-
+pg ":: Domain Settings Verification ::"
 pl
+
+
+DOMAINS_MAX=${#DOMAINS[@]}
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+	
+	pnn "- Domain : "
+	pg $CUST/$SITE
+
+	pnn "- Settings location valid : "
+	if [ -d $MASTER_DB/$DOMAIN_NEXT ]; then
+		pg "Yes"
+	else
+		pr "No"
+		pl
+		pr "Error: Settings folder does not exist"
+		exit 1
+	fi
+	
+	pnn "- Netplan verification : "
+	netplan_verify $CUST $SITE
+	pg "Done"
+
+	pl
+
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+done
+
+pg ":: Domain Settings Cloud Update ::"
+pl
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+
+	pnn "- Domain : "
+	pg $CUST/$SITE
+
+	pnn "- Publishing Domain Settings : "
+	update_settings_check
+	pg "Done"
+
+	pnn "- Change Status : "
+	pg "$SETTINGS_UPDATE_STATUS"
+
+done

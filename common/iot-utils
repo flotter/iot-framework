@@ -182,6 +182,88 @@ S3_DEVICE_FW="s3://iot-device-fw"
 S3_DEVICE_DL="s3://iot-device-download"
 S3_DEVICE_UL="s3://iot-device-upload"
 
+update_settings_check() {
+	SETTINGS_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/ 2>&1)
+	SETTINGS_UPDATE_RET=$?
+
+	if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
+		pr "Fail"
+	        pl 
+	        pr "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
+
+		log "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
+	        exit 1 
+	fi
+
+	S1=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
+	S2=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
+	S3=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
+
+	if [ "x$S1" != "x0" ] || [ "x$S2" != "x0" ] || [ "x$S3" != "x0" ]; then
+		
+		VER=$(cat $MASTER_DB/$CUST/$SITE/settings/.version)
+	        VER=$((VER + 1))
+	        echo $VER > $MASTER_DB/$CUST/$SITE/settings/.version
+	        
+		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/
+		SETTINGS_UPDATE_RET=$?
+
+		if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
+			pr "Fail"
+		        pl 
+		        pr "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
+	
+			log "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
+		        exit 1 
+	        fi
+
+		SETTINGS_UPDATE_STATUS="Updated"
+	else
+		SETTINGS_UPDATE_STATUS="Unmodified"
+	fi
+}
+
+update_payload_check() {
+	PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/ 2>&1)
+	PAYLOAD_UPDATE_RET=$?
+
+	if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
+		pr "Fail"
+	        pl 
+	        pr "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
+
+		log "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
+	        exit 1 
+	fi
+
+	P1=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
+	P2=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
+	P3=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
+
+	if [ "x$P1" != "x0" ] || [ "x$P2" != "x0" ] || [ "x$P3" != "x0" ]; then
+		
+		VER=$(cat $MASTER_DB/$CUST/$SITE/payload/.version)
+	        VER=$((VER + 1))
+	        echo $VER > $MASTER_DB/$CUST/$SITE/payload/.version
+	        
+		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
+		PAYLOAD_UPDATE_RET=$?
+
+		if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
+			pr "Fail"
+		        pl 
+		        pr "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
+	
+			log "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
+		        exit 1 
+	        fi
+
+		PAYLOAD_UPDATE_STATUS="Updated"
+	else
+		PAYLOAD_UPDATE_STATUS="Unmodified"
+	fi
+}
+
 #----------------------------------------------------#
 # COMMON CHECKS                                      #
 #----------------------------------------------------#
@@ -262,21 +344,26 @@ netplan_verify() {
 	fi
 }
 
-select_domain() {
+select_domain_cust() {
 	
 	log "Selecting Customer ID"
 	
+	EXTRA="$1"
 	mkdir -p $MASTER_DB
-	CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
+	if [ -z "$EXTRA" ]; then
+		CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
+	else
+		CUST_LIST=("$EXTRA" $(ls $MASTER_DB | grep cust- || true))
+	fi
 	CUST_LIST_MAX=${#CUST_LIST[@]}
 	SELECT=$CUST_LIST_MAX
 	ITER=0
-	
+
 	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
 	
 	        if [ $CUST_LIST_MAX -eq 0 ]; then
 	                break
-	                fi
+	        fi
 	
 	        if [ $ITER -ne 0 ]; then
 	                pl
@@ -305,18 +392,33 @@ select_domain() {
 	        pl
 	        exit 1
 	fi
+
+	if [ "$CUST" = "$EXTRA" ]; then
+		# This is a wildcard, so empty
+		CUST=
+	fi
+}
+
+select_domain_site() {
+
 	log "Selecting Site ID"
+
+	EXTRA="$1"
 	mkdir -p $MASTER_DB/$CUST
-	SITE_LIST=($(ls $MASTER_DB/$CUST | grep site- || true))
+	if [ -z "$EXTRA" ]; then
+		SITE_LIST=($(ls $MASTER_DB/$CUST | grep site- || true))
+	else
+		SITE_LIST=("$EXTRA" $(ls $MASTER_DB/$CUST | grep site- || true))
+	fi
 	SITE_LIST_MAX=${#SITE_LIST[@]}
 	SELECT=$SITE_LIST_MAX
 	ITER=0
 	
 	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
 	
-	                if [ $SITE_LIST_MAX -eq 0 ]; then
+	        if [ $SITE_LIST_MAX -eq 0 ]; then
 	                break
-	                fi
+	        fi
 	
 	        if [ $ITER -ne 0 ]; then
 	                pl
@@ -345,6 +447,54 @@ select_domain() {
 	        pl
 	        exit 1
 	fi
+	
+	if [ "$SITE" = "$EXTRA" ]; then
+		# This is a wildcard, so empty
+		SITE=
+	fi
+}
+
+select_domain() {
+	select_domain_cust
+	select_domain_site
+}
+
+domain_iterate() {
+	
+	log "Domain Iterate: CUST=$CUST, SITE=$SITE"
+
+	DOMAINS=()
+	
+	mkdir -p $MASTER_DB
+	CUST_LIST=($(ls $MASTER_DB | grep cust- || true))
+	CUST_LIST_MAX=${#CUST_LIST[@]}
+	CUST_COUNT=0
+	
+	while [ $CUST_COUNT -lt $CUST_LIST_MAX ] ; do
+	
+		CUST_NEXT=${CUST_LIST[$CUST_COUNT]}
+	
+		if [ -z "$CUST" ] || [ "$CUST_NEXT" = "$CUST" ]; then
+
+			mkdir -p $MASTER_DB/$CUST_NEXT
+			SITE_LIST=($(ls $MASTER_DB/$CUST_NEXT | grep site- || true))
+			SITE_LIST_MAX=${#SITE_LIST[@]}
+			SITE_COUNT=0
+
+			while [ $SITE_COUNT -lt $SITE_LIST_MAX ] ; do
+
+				SITE_NEXT=${SITE_LIST[$SITE_COUNT]}
+
+				if [ -z "$SITE" ] || [ "$SITE_NEXT" = "$SITE" ]; then
+					DOMAINS+=("$CUST_NEXT/$SITE_NEXT")
+				fi
+
+				SITE_COUNT=$((SITE_COUNT + 1))
+			done
+		fi
+
+	        CUST_COUNT=$((CUST_COUNT + 1))
+	done
 }
 
 select_device() {
