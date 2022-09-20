@@ -307,11 +307,11 @@ mkdir -p $MASTER_DB/$CUST/$SITE/settings
 pg "Done"
 
 pnn "- Copying default settings : "
-run tar xvzf $CPWD/firmware/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
+run tar xvzf $IOT_DEVICE_DIR/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
 pg "Done"
 
 pnn "- Copying default payload : "
-run tar xvzf $CPWD/firmware/payload.tar.gz -C $MASTER_DB/$CUST/$SITE/payload
+run tar xvzf $IOT_DEVICE_DIR/payload.tar.gz -C $MASTER_DB/$CUST/$SITE/payload
 pg "Done"
 
 pl

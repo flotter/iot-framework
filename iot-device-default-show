@@ -110,7 +110,7 @@ if [ -z "$DEVICE" ]; then
 	pl
 	exit 1
 fi
-if [ ! -d $REPO_ROOT/firmware/$DEVICE ]; then
+if [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
 	pl
 	pr "Error: Device does not exist. Please check the spelling."
 	pl
