@@ -6,7 +6,7 @@ CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
 # COMMON ATTRIBUTES                                  #
 #----------------------------------------------------#
 
-source $CPWD/common/iot-utils
+source $CPWD/scripts/iot-utils
 
 #----------------------------------------------------#
 # DEFINES / MACROS                                   #
@@ -133,7 +133,7 @@ pl
 pg ":: Firmware Selection ::"
 pl
 
-LOCAL_FIRMWARE_MSG="*** Select locally built image ***"
+LOCAL_FIRMWARE_MSG="*** Select locally built image instead ***"
 FIRMWARES_REMOTE=("$LOCAL_FIRMWARE_MSG" $(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | grep $DEVICE | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
 COUNT=0
 COUNT_MAX=${#FIRMWARES_REMOTE[@]}
@@ -148,20 +148,22 @@ while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
 		pl
 	fi 
 
+	pn "Please select remote firmware from the list:"
 	COUNT=0
 	while [ $COUNT -lt $COUNT_MAX ]; do
-		pn "[$((COUNT + 1))] ${FIRMWARES_REMOTE[$COUNT]}"
+		pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_REMOTE[$COUNT]}"
 		COUNT=$((COUNT + 1))
 	done
 
-
-	read -n 1 -s SELECT
-	SELECT=$((SELECT - 1))
-	ITER=$((ITER + 1))
+        pl
+        pnn "Choice? : "
+        read SELECT
+        SELECT=$((SELECT - 1))
+        ITER=$((ITER + 1))
 done
-IMAGE_INPUT=${FIRMWARES_REMOTE[$SELECT]}
+FIRMWARE_REMOTE=${FIRMWARES_REMOTE[$SELECT]}
 
-if [ "x$((SELECT + 1))" == "x$COUNT_MAX" ]; then
+if [ "$FIRMWARE_REMOTE" = "$LOCAL_FIRMWARE_MSG" ]; then
 
 	pn
 	pg ":: LOCAL IMAGE SELECTION ::"

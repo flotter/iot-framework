@@ -22,6 +22,10 @@ FIRMWARE_PAYLOAD_MAX_SIZE=32
 REPO_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && cd .. && pwd )
 MASTER_DB=$REPO_ROOT/database
 TOOL_SETTINGS=/home/$USER/.iot-tools/settings
+IOT_DEVICE_DIR=$REPO_ROOT/iot
+IOT_FW_DIR=$REPO_ROOT/firmware
+IOT_BUILD_DIR=$REPO_ROOT/build
+IOT_DOWNLOAD_DIR=$REPO_ROOT/download
 
 #----------------------------------------------------#
 # PRINTING ROUTINES                                  #
@@ -109,7 +113,7 @@ common_setup() {
                 echo "IOT_DOMAIN=$IOT_DOMAIN" >> $TOOL_SETTINGS
 	fi
         if [ -v IOT_DEVICE ]; then
-                if [ ! -d $REPO_ROOT/firmware/$IOT_DEVICE ]; then
+                if [ ! -d $IOT_DEVICE_DIR/$IOT_DEVICE ]; then
 			pr "Fail"
 			pl
 			pr "Support for device $IOT_DEVICE does not exist. Did you spell it correctly?"
@@ -320,7 +324,7 @@ device_check() {
 	        pl
 	        exit 1
 	fi
-	if [ ! -d "$REPO_ROOT/firmware/$(device)" ]; then
+	if [ ! -d "$IOT_DEVICE_DIR/$(device)" ]; then
 		pr "Fail"
 	        pl
 	        pr "Error: Device does not exist. Please check the spelling."
@@ -503,8 +507,8 @@ select_device() {
 	
 	log "Selecting Device"
 	
-	mkdir -p $REPO_ROOT/firmware
-	DEVICE_LIST=($(ls $REPO_ROOT/firmware | grep device- || true))
+	mkdir -p $IOT_DEVICE_DIR
+	DEVICE_LIST=($(ls $IOT_DEVICE_DIR | grep device- || true))
 	DEVICE_LIST_MAX=${#DEVICE_LIST[@]}
 	SELECT=$DEVICE_LIST_MAX
 	ITER=0
@@ -513,7 +517,7 @@ select_device() {
 	
 	        if [ $DEVICE_LIST_MAX -eq 0 ]; then
 	                break
-	                fi
+	        fi
 	
 	        if [ $ITER -ne 0 ]; then
 	                pl

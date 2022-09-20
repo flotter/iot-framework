@@ -6,7 +6,7 @@ CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
 # COMMON ATTRIBUTES                                  #
 #----------------------------------------------------#
 
-source $CPWD/common/iot-utils
+source $CPWD/scripts/iot-utils
 
 #----------------------------------------------------#
 # BODY                                               #
