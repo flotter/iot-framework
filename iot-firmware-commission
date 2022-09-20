@@ -350,142 +350,16 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 
 done
 
-pl
-echo ">> $FIRMWARE_NAME <<"
-echo ">> $FIRMWARE_NAME_FINAL <<"
-exit 1
-
+log "Commissioning Temp Image Name: $FIRMWARE_NAME"
+log "Commissioning Final Image Name: $FIRMWARE_NAME_FINAL"
 
 pl
-pnn "- Image selected : "
-pg $IMAGE_INPUT
-pnn "- Customer selected : "
-pg $CUST_INPUT
-pnn "- Site selected : "
-pg $SITE_INPUT
+pg ":: Commissioning Image ::"
 pl
 
-echo "[$(date)] Commissioning Details [$IMAGE_INPUT, $CUST_INPUT, $SITE_INPUT]" >> $LOG
-
-pnn "- Creating target image : "
-IMAGE_INPUT_NEW="$S3_SOURCE/$CUST_INPUT/$SITE_INPUT/$(echo $(basename $IMAGE_INPUT) | sed -n 's/^\(.*\).img/\1/p')-commissioned-$CUST_INPUT-$SITE_INPUT-${COMM_VERSION}_${DATE}.img"
-run cp -f $IMAGE_INPUT $IMAGE_INPUT_NEW
-IMAGE_INPUT=$IMAGE_INPUT_NEW
-pg "DONE"
-
-pnn "- Output Image : "
-pg $IMAGE_INPUT
-
-pnn "- Checking if settings is available : "
-if [ -d $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings ]; then
-	pg "PASS"
-else
-	pr "FAIL"
-	pl
-	pr "Settings does not exist ($CUST_INPUT/$SITE_INPUT/settings)"
-	pl
-	pn "Please create settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
-	exit 1
-fi
-
-pnn "- Checking if WIFI is customer specific : "
-if [ -f $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi ]; then
-	cat $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi | grep "TEST-SSID" > /dev/null 2>&1
-	RET=$?
-	if [ $RET -eq 0 ]; then
-		pr "FAIL"
-		pl
-		pr "WIFI settings not site specific - remove unused ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
-		pl
-		pn "Please edit WIFI settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
-		exit 1
-	fi
-	pg "PASS"
-else
-	pr "FAIL"
-	pl
-	pr "WIFI settings does not exist ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
-	pl
-	pn "Please create settings (Customer: $CUST_INPUT, Site: $SITE_INPUT)"
-	exit 1
-fi
-
-pnn "- Checking WIFI settings : "
-mkdir -p /tmp/testyaml
-/lib/netplan/generate -r /tmp/testyaml $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/.wifi
-RET=$?
-if [ $RET -ne 0 ]; then
-	pr "FAIL"
-	pl
-	pr "Wifi settings invalid for Netplan ($CUST_INPUT/$SITE_INPUT/settings/.wifi)"
-	
-	echo "[$(date)] Wifi settings invalid ($CUST_INPUT/$SITE_INPUT/settings/.wifi)" >> $LOG
-	
-	exit 1
-fi
-pg "DONE"
-rm -rf /tmp/testyaml
-
-pnn "- Checking payload : "
-if [ ! -d $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload ]; then
-	pg "NOT SUPPLIED"
-else
-	
-	if [ -z "$(ls -A $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload)" ]; then
-		pr "FAIL"
-		pl
-		pr "Empty payload folder not allowed ($CUST_INPUT/$SITE_INPUT/payload)"
-		pl
-		pn "Delete the folder or add payload files."
-		exit 1
-	fi
-	
-	S=$(du -hs --block-size=1M $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
-	if [ $S -gt $PAYLOAD_MAX_SIZE ]; then
-		pr "FAIL"
-		pl
-		pr "Playlists exceed ${PAYLOAD_MAX_SIZE}Mib ($CUST_INPUT/$SITE_INPUT/payload)"
-		exit 1
-	fi
-fi
 
 
 
-echo "[$(date)] Commissioning checks OK" >> $LOG
-
-		
-pnn "- Syncing cloud with payload data : "
-
-PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL --no-check-md5 sync --no-preserve --delete-removed $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/ $S3_DEVICE_DL/$CUST_INPUT/$SITE_INPUT/payload/ 2>&1)
-PAYLOAD_UPDATE_RET=$?
-
-if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
-	pl
-	pr "PAYLOAD: Upload failed (Ret: $PAYLOAD_UPDATE_RET)"
-	exit 1
-fi		
-
-pg "DONE"
-
-pnn "- Syncing cloud with settings : "
-
-SETTINGS_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings/ $S3_DEVICE_DL/$CUST_INPUT/$SITE_INPUT/settings/ 2>&1)
-SETTINGS_UPDATE_RET=$?
-	
-if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
-	pl
-	pr "SETTINGS: Upload failed (Ret: $SETTINGS_UPDATE_RET)"
-	exit 1
-fi	
-
-# Set commissioned flag under stats
-mkdir -p $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/	
-if [ ! -f $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned ]; then
-	touch $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned
-	run s3cmd -v --config $S3_ALL put --no-preserve $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/.commissioned $S3_DEVICE_UL/$CUST_INPUT/$SITE_INPUT/
-fi
-
-pg "DONE"
 
 pnn "- Mounting root filesystem : "
 
