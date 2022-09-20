@@ -163,6 +163,16 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	fi
 	
 	pnn "- Payload size check : "
+	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
+	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
+		pr "Fail"
+		pl
+		pr "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
+		
+		log "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
+		
+		exit 1
+	fi
 	pg "Done"
 
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
