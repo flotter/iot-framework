@@ -1,0 +1,130 @@
+#!/bin/bash -e
+
+#----------------------------------------------------#
+# COMMON DEFINES                                     #
+#----------------------------------------------------#
+
+DEVICE_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+#----------------------------------------------------#
+# COMMISSION                                         #
+#----------------------------------------------------#
+
+device_commission() {
+
+	pnn "- Mounting root filesystem : "
+	
+	LOOPDEV=$(losetup --show -P -f $FIRMWARE_NAME)
+	mkdir -p $CPWD/mnt/boot
+	mkdir -p $CPWD/mnt/enc
+	mkdir -p $CPWD/mnt/root
+	mount -o rw ${LOOPDEV}p4 $CPWD/mnt/enc
+	mount -o rw ${LOOPDEV}p2 $CPWD/mnt/root
+	mount -o rw ${LOOPDEV}p1 $CPWD/mnt/boot
+	
+	pg "Done"
+	
+	# We need to commission this image to match a customer::site
+	
+	pnn "- Setting domain : "
+	mkdir -p $CPWD/mnt/boot/iot/commission
+	echo "$CUST" > $CPWD/mnt/boot/iot/commission/.cust
+	echo "$SITE" > $CPWD/mnt/boot/iot/commission/.site
+	pg "Done"
+	
+	pnn "- Setting hostname : "
+	run sed -i "s/HOSTNAMEXXX/$DEVICE-$(echo $CUST | sed 's/cust-//g')-$(echo $SITE | sed 's/site-//g')/g" $CPWD/mnt/boot/user-data
+	pg "Done"
+	
+	pnn "- Installing S3 user keys : "
+	run cp -f $CPWD/security/s3/.s3cfg-download $CPWD/mnt/boot/iot/commission/.s3cfg-download
+	run cp -f $CPWD/security/s3/.s3cfg-upload $CPWD/mnt/boot/iot/commission/.s3cfg-upload
+	pg "DONE"
+	
+	
+	pnn "- Installing unit settings (i.e. wifi) : "
+	mkdir -p $CPWD/mnt/boot/iot
+	run cp -Rf $MASTER_DB/$CUST/$SITE/settings $CPWD/mnt/boot/iot/
+	pg "Done"
+
+	pnn "- Commissioning payload : "
+	
+	if [ "x$SKIP_PAYLOAD" == "xfalse" ]; then
+	        mkdir -p $CPWD/mnt/enc/live/payload
+	        mkdir -p $CPWD/mnt/enc/update/payload
+	        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/live/payload/
+	        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/update/payload/
+	        run touch $CPWD/mnt/boot/iot/.enc-formatted
+	        pg "Done"
+	else
+	        pg "Skipped"
+	fi
+	
+	if [ "x$DEBUG_SHELL" == "xtrue" ]; then
+	
+	        pnn "- Preparing for foreign chroot : "
+	
+	        mount --bind /dev $CPWD/mnt/root/dev/
+	        mount --bind /sys $CPWD/mnt/root/sys/
+	        mount --bind /proc $CPWD/mnt/root/proc/
+	        mount --bind /dev/pts $CPWD/mnt/root/dev/pts
+	        mkdir -p $CPWD/mnt/root/boot/firmware
+	        mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
+	
+	        mkdir -p $CPWD/mnt/root/home/iot/enc
+	        mount --bind $CPWD/mnt/enc $CPWD/mnt/root/home/iot/enc
+	
+	        cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
+	
+	        pg "Done"
+	
+	        pn
+	        pg "Foreign chroot start"
+	        pn
+	
+	        chroot $CPWD/mnt/root /bin/bash
+	
+	        pn
+	        pg "Foreign chroot end"
+	        pn
+	
+	        pnn "- Cleaning up chroot : "
+	
+	        rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
+	
+	        sync
+	
+	        umount $CPWD/mnt/root/home/iot/enc
+	        rm -rf $CPWD/mnt/root/home/iot/enc
+	        umount $CPWD/mnt/root/boot/firmware
+	        umount $CPWD/mnt/root/dev/pts
+	        umount $CPWD/mnt/root/dev/
+	        umount $CPWD/mnt/root/sys/
+	        umount $CPWD/mnt/root/proc/
+	
+	        pg "Done"
+	
+	
+	fi
+	
+	pnn "- Waiting for depedencies : "
+	sync
+	sleep 5
+	pg "Done"
+	
+	pnn "- Unmounting root filesystem : "
+	cd $CPWD/
+	umount ${LOOPDEV}p1
+	umount ${LOOPDEV}p2
+	umount ${LOOPDEV}p4
+	rm -d $CPWD/mnt/boot
+	rm -d $CPWD/mnt/root
+	rm -d $CPWD/mnt/enc
+	pg "Done"
+	
+	pnn "- Waiting for depedencies : "
+	sync
+	sleep 5
+	run losetup -d ${LOOPDEV}
+	pg "OK"
+}

@@ -357,128 +357,24 @@ pl
 pg ":: Commissioning Image ::"
 pl
 
+if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-commission ]; then
+	pl
+	pr "Error: Cannot locate commission script for device: $DEVICE"
+	pl
 
-
-
-
-pnn "- Mounting root filesystem : "
-
-LOOPDEV=$(losetup --show -P -f $IMAGE_INPUT)
-mkdir -p $CPWD/mnt/boot
-mkdir -p $CPWD/mnt/enc
-mkdir -p $CPWD/mnt/root
-mount -o rw ${LOOPDEV}p4 $CPWD/mnt/enc
-mount -o rw ${LOOPDEV}p2 $CPWD/mnt/root
-mount -o rw ${LOOPDEV}p1 $CPWD/mnt/boot
-
-pg "DONE"
-
-# We need to commission this image to match a customer::site
-
-pnn "- Inserting Customer and Site ID : "
-mkdir -p $CPWD/mnt/boot/iot/commission
-echo "$CUST_INPUT" > $CPWD/mnt/boot/iot/commission/.cust
-echo "$SITE_INPUT" > $CPWD/mnt/boot/iot/commission/.site
-pg "DONE"
-
-pnn "- Hostname : "
-run sed -i "s/HOSTNAMEXXX/RPI-$(echo $CUST_INPUT | sed 's/cust-//g')-$(echo $SITE_INPUT | sed 's/site-//g')/g" $CPWD/mnt/boot/user-data
-pg "DONE"
-
-pnn "- Inserting S3 Keys : "
-run cp -f $CPWD/security/s3/.s3cfg-download $CPWD/mnt/boot/iot/commission/.s3cfg-download
-run cp -f $CPWD/security/s3/.s3cfg-upload $CPWD/mnt/boot/iot/commission/.s3cfg-upload
-pg "DONE"
-
-
-pnn "- Installing unit settings (i.e. wifi) : "
-mkdir -p $CPWD/mnt/boot/iot
-run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/settings $CPWD/mnt/boot/iot/
-echo "-1" > $CPWD/mnt/boot/iot/settings/.version
-pg "DONE"
-
-
-pnn "- Payload pre-commissioning : "
-
-if [ "x$SKIP_PAYLOAD" == "xfalse" ]; then
-	mkdir -p $CPWD/mnt/enc/live/payload
-	mkdir -p $CPWD/mnt/enc/update/payload
-        run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/* $CPWD/mnt/enc/live/payload/
-        run cp -Rf $S3_SOURCE/$CUST_INPUT/$SITE_INPUT/payload/* $CPWD/mnt/enc/update/payload/
-	run touch $CPWD/mnt/boot/iot/.enc-formatted
-	pg "DONE"
-else
-	pg "SKIPPED"
+	log "Error: Cannot locate commission script for device: $DEVICE"
+	exit 1
 fi
 
-if [ "x$DEBUG_SHELL" == "xtrue" ]; then
-	
-	pnn "- Preparing for foreign chroot : "
-	
-	mount --bind /dev $CPWD/mnt/root/dev/
-	mount --bind /sys $CPWD/mnt/root/sys/
-	mount --bind /proc $CPWD/mnt/root/proc/
-	mount --bind /dev/pts $CPWD/mnt/root/dev/pts
-	mkdir -p $CPWD/mnt/root/boot/firmware
-	mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
-        
-        mkdir -p $CPWD/mnt/root/home/iot/enc_drive
-        mount --bind $CPWD/mnt/enc $CPWD/mnt/root/home/iot/enc_drive  
-	
-	cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
-	
-	pg "DONE"
-	
-	pn
-	pg "Foreign chroot start"
-	pn
-	
-	chroot $CPWD/mnt/root /bin/bash 
-	
-	pn
-	pg "Foreign chroot end"
-	pn
-	
-	pnn "- Cleaning up chroot : "
-	
-	rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
-	
-	sync
-	
-        umount $CPWD/mnt/root/home/iot/enc_drive
-        rm -rf $CPWD/mnt/root/home/iot/enc_drive
-	umount $CPWD/mnt/root/boot/firmware
-	umount $CPWD/mnt/root/dev/pts
-	umount $CPWD/mnt/root/dev/
-	umount $CPWD/mnt/root/sys/
-	umount $CPWD/mnt/root/proc/
-	
-	pg "DONE"
-	
-	
-fi
+source $IOT_DEVICE_DIR/$DEVICE/device-commission
 
-pnn "- Waiting for depedencies (5sec) : "
-sync
-sleep 5
-pg "OK"
+device_commission
 
-pnn "- Unmounting root filesystem : "
-cd $CPWD/
-umount ${LOOPDEV}p1
-umount ${LOOPDEV}p2
-umount ${LOOPDEV}p4
-rm -d $CPWD/mnt/boot
-rm -d $CPWD/mnt/root
-rm -d $CPWD/mnt/enc
-pg "DONE"
-
-pnn "- Waiting for depedencies (5sec) : "
-sync
-sleep 5
-run losetup -d ${LOOPDEV}
-pg "OK"
+rm -rf $FIRMWARE_NAME_FINAL
+mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
 
 pl
-pg "Image Ready: $IMAGE_INPUT"
+pnn "Device Firmware Ready : "
+pg "$FIRMWARE_NAME_FINAL"
 pl
+
