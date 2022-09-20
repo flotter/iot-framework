@@ -132,6 +132,7 @@ else
 	# Single Default domain (Non-admin mode compatible)
 	DOMAINS=($DOMAIN)
 	pn "Default domain selected : $DOMAIN"
+	pl
 fi
 
 

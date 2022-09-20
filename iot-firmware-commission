@@ -1,9 +1,246 @@
-#!/bin/bash
+#!/bin/bash -e
 
-### DEFINES ###
-
-USER=`whoami`
 CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#----------------------------------------------------#
+# COMMON ATTRIBUTES                                  #
+#----------------------------------------------------#
+
+source $CPWD/common/iot-utils
+
+#----------------------------------------------------#
+# DEFINES / MACROS                                   #
+#----------------------------------------------------#
+
+LOG=$MASTER_DB/iot-firmware-commission.log
+
+#----------------------------------------------------#
+# CMDLINE OPTIONS                                    #
+#----------------------------------------------------#
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+DEBUG_SHELL=false
+SKIP_PAYLOAD=false
+
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	elif [ "x$STRIP" == "x-d" ]; then
+		DEBUG_SHELL=true
+	elif [ "x$STRIP" == "x-s" ]; then
+		SKIP_PAYLOAD=true
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+log "Started"
+
+pl
+pg "iot-firmware-commission ($VERSION)"
+
+if [ "$HELP" == "true" ]; then
+	pn "Usage:"
+	pl
+	pn "Commission existing firmware image for specific domain."
+	pl
+	pn "iot-firmware-commission [-v] [-h] ..."
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)      Verbose output for operations"
+	pn "-h (--help)         Print this"
+	pn "-d (--debug-shell)  Interactive shell"
+	pn "-s (--skip-payload) Payload will be updated when the unit is live"
+	pl
+	exitbuild
+fi
+
+#----------------------------------------------------#
+# PREPARE                                            #
+#----------------------------------------------------#
+
+pn
+pg ":: Setup & Checks ::"
+pn
+
+common_setup
+
+log "Common Setup OK"
+
+pnn "- Admin mode enabled : "
+ADMIN=$(admin)
+if [ "x$ADMIN" == "x1" ]; then
+	pg "Yes"
+else
+	pg "No"
+fi
+
+#----------------------------------------------------#
+# BODY                                               #
+#----------------------------------------------------#
+
+pl
+pg ":: Device Selection ::"
+pl
+
+DEVICE=$(device)
+
+if [ -z "$DEVICE" ] || [ ! -d $REPO_ROOT/firmware/$DEVICE ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		select_device
+	else
+		pl
+		pr "No default device is set. Without Admin mode we cannot proceed."
+		pl
+		exit 1
+	fi
+else
+	# Default device (Non-admin mode compatible)
+	pn "Default device selected : $DEVICE"
+fi
+
+pl
+pg ":: Firmware Selection ::"
+pl
+
+LOCAL_FIRMWARE_MSG="*** Select locally built image ***"
+FIRMWARES_REMOTE=("$LOCAL_FIRMWARE_MSG" $(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | grep $DEVICE | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
+COUNT=0
+COUNT_MAX=${#FIRMWARES_REMOTE[@]}
+SELECT=$COUNT_MAX
+ITER=0
+
+while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
+
+	if [ $ITER -ne 0 ]; then
+		pl
+		pr "Error: Your choice is invalid!\n"
+		pl
+	fi 
+
+	COUNT=0
+	while [ $COUNT -lt $COUNT_MAX ]; do
+		pn "[$((COUNT + 1))] ${FIRMWARES_REMOTE[$COUNT]}"
+		COUNT=$((COUNT + 1))
+	done
+
+
+	read -n 1 -s SELECT
+	SELECT=$((SELECT - 1))
+	ITER=$((ITER + 1))
+done
+IMAGE_INPUT=${FIRMWARES_REMOTE[$SELECT]}
+
+if [ "x$((SELECT + 1))" == "x$COUNT_MAX" ]; then
+
+	pn
+	pg ":: LOCAL IMAGE SELECTION ::"
+	pn
+
+	mkdir -p $IMAGE_INPUT_DIR
+	IMAGES=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz))
+	COUNT=0
+	COUNT_MAX=${#IMAGES[@]}
+	SELECT=$COUNT_MAX
+	ITER=0
+
+	if [ $COUNT_MAX -eq 0 ]; then
+		pr "No images in $IMAGE_INPUT_DIR"
+		exit 1
+	fi
+
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
+
+		if [ $ITER -ne 0 ]; then
+			pl
+			pr "Error: Your choice is invalid!\n"
+			pl
+		fi 
+
+		COUNT=0
+		while [ $COUNT -lt $COUNT_MAX ]; do
+			pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
+			COUNT=$((COUNT + 1))
+		done
+
+
+		read -n 1 -s SELECT
+		SELECT=$((SELECT - 1))
+		ITER=$((ITER + 1))
+	done
+	IMAGE_INPUT=$IMAGE_INPUT_DIR/${IMAGES[$SELECT]}
+else
+	# Remote image download and extract
+	pl
+	pnn "- Downloading image from S3 (2.5GB takes time...) : "
+	run rm -rf $IMAGE_INPUT_DIR
+	run rm -rf $IMAGE_DL_DIR
+	mkdir -p $IMAGE_INPUT_DIR
+	mkdir -p $IMAGE_DL_DIR
+	run s3cmd --config $S3_ALL get $S3_DEVICE_FW/$IMAGE_INPUT.tar.gz $IMAGE_DL_DIR/ 
+	RET=$?
+	if [ $RET -ne 0 ]; then
+		pl
+		pr "IMAGE: Download failed (Ret: $RET)"
+		exit 1
+	fi
+	pg "DONE"
+	pnn "- Decompressing image (takes time...): "
+	if [ ! -f $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz ]; then
+		pl
+		pr "IMAGE: Not found (Image: $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz)"
+		exit 1
+	else
+		run rm -rf $IMAGE_INPUT_DIR/$IMAGE_INPUT
+		run tar xvzf $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz -C $IMAGE_INPUT_DIR/
+		IMAGE_INPUT=$IMAGE_INPUT_DIR/$IMAGE_INPUT
+	fi
+	pg "DONE"
+
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 COMM_VERSION="v1.0.0"
 DATE=$(date +"%d_%m_%y__%H_%M_%S")
@@ -75,102 +312,7 @@ function exitbuild() {
 
 ### OPTIONS ###
 
-ARGC=$#
-ARGV=("$@")
 
-VERBOSE=false
-HELP=false
-IMAGE_INPUT=
-CUST_INPUT=
-SITE_INPUT=
-INTERACTIVE=false
-SKIP_PAYLOAD=false
-
-
-# Clear args
-set --
-
-COUNT=0
-while [ $COUNT -lt $ARGC ]; do
-	STRIP=${ARGV[COUNT]}
-
-	ID=0
-	LONGFORMAT=`echo $STRIP | cut -b 1-2`
-	if [ "x$LONGFORMAT" == "x--" ]; then
-		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
-	else
-		ID=`echo $STRIP | cut -b 3-`
-		STRIP=`echo $STRIP | cut -b 1-2`
-	fi
-	
-
-	if [ "x$STRIP" == "x-v" ]; then
-		VERBOSE=true
-	elif [ "x$STRIP" == "x-h" ]; then
-		HELP=true
-	elif [ "x$STRIP" == "x-i" ]; then
-		INTERACTIVE=true
-	elif [ "x$STRIP" == "x-m" ]; then
-		SKIP_PAYLOAD=true
-	elif [ "x$STRIP" == "x-f" ]; then
-		COUNT=$((COUNT+1))
-		IMAGE_INPUT=${ARGV[COUNT]}
-		if [ "x$IMAGE_INPUT" == "x" ]; then			
-			pl
-			pr "Error: Unknown argument"
-			COUNT=$ARGC
-			HELP=true
-		fi
-	elif [ "x$STRIP" == "x-c" ]; then
-		COUNT=$((COUNT+1))
-		CUST_INPUT=${ARGV[COUNT]}
-		if [ "x$CUST_INPUT" == "x" ]; then			
-			pl
-			pr "Error: Unknown argument"
-			COUNT=$ARGC
-			HELP=true
-		fi
-	elif [ "x$STRIP" == "x-s" ]; then
-		COUNT=$((COUNT+1))
-		SITE_INPUT=${ARGV[COUNT]}
-		if [ "x$SITE_INPUT" == "x" ]; then			
-			pl
-			pr "Error: Unknown argument"
-			COUNT=$ARGC
-			HELP=true
-		fi
-	else
-		pl
-		pr "Error: Unknown argument"
-		COUNT=$ARGC
-		HELP=true
-	fi
-COUNT=$((COUNT+1))
-done
-
-pl
-pg "IOT Device Image Commissioning Tool $COMM_VERSION"
-pl
-
-echo "[$(date)] Commissioning Started OK" >> $LOG
-
-if [ "$HELP" == "true" ]; then
-	pn "Usage:"
-	pl
-	pn "ep-commission [-v] [-h] [-i <PATH>]"
-	pl
-	pn "Help:"
-	pl
-	pn "-v (--verbose)      Verbose output for operations"
-	pn "-h (--help)         Print this"
-	pn "-i (--interactive)  Interactive bash"
-	pn "-f (--file-image)   Image to commission"
-	pn "-c (--cust-input)   Customer selected"
-	pn "-s (--site-input)   Site selected"
-	pn "-m (--payload-skip) Do not transfer site payload now"
-	pl
-	exitbuild
-fi
 
 pn
 pg ":: ENVIRONMENT SETUP ::"
@@ -592,7 +734,7 @@ else
 	pg "SKIPPED"
 fi
 
-if [ "x$INTERACTIVE" == "xtrue" ]; then
+if [ "x$DEBUG_SHELL" == "xtrue" ]; then
 	
 	pnn "- Preparing for foreign chroot : "
 	
