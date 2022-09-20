@@ -83,6 +83,18 @@ run() {
 
 common_setup() {
 
+	pnn "- Running as user : "
+        pg $USER
+	
+	pnn "- Running with Sudo : "
+	ID=$(id -u)
+	if [ "x$ID" == "x0" ]; then
+	    pg "Yes"
+	else
+	    pr "No"
+	    exit 1
+	fi
+
         pnn "- Apply environment override settings : "
         mkdir -p $(dirname $TOOL_SETTINGS)
         touch $TOOL_SETTINGS
@@ -111,18 +123,6 @@ common_setup() {
                 echo "IOT_ADMIN=$IOT_ADMIN" >> $TOOL_SETTINGS
 	fi
         pg "Done"
-
-	pnn "- Running as user : "
-        pg $USER
-	
-	pnn "- Running with Sudo : "
-	ID=$(id -u)
-	if [ "x$ID" == "x0" ]; then
-	    pg "Yes"
-	else
-	    pr "No"
-	    exit 1
-	fi
 	
 	pnn "- Installing missing components : "
 	run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ntpdate
@@ -199,11 +199,12 @@ update_settings_check() {
 	S2=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
 	S3=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
 
+	OVER=$(cat $MASTER_DB/$CUST/$SITE/settings/.version)
+
 	if [ "x$S1" != "x0" ] || [ "x$S2" != "x0" ] || [ "x$S3" != "x0" ]; then
 		
-		VER=$(cat $MASTER_DB/$CUST/$SITE/settings/.version)
-	        VER=$((VER + 1))
-	        echo $VER > $MASTER_DB/$CUST/$SITE/settings/.version
+	        NVER=$((OVER + 1))
+	        echo $NVER > $MASTER_DB/$CUST/$SITE/settings/.version
 	        
 		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/
 		SETTINGS_UPDATE_RET=$?
@@ -217,14 +218,14 @@ update_settings_check() {
 		        exit 1 
 	        fi
 
-		SETTINGS_UPDATE_STATUS="Updated"
+		SETTINGS_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
 	else
-		SETTINGS_UPDATE_STATUS="Unmodified"
+		SETTINGS_UPDATE_STATUS="No Change (v$OVER)"
 	fi
 }
 
 update_payload_check() {
-	PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/ 2>&1)
+	PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/ 2>&1)
 	PAYLOAD_UPDATE_RET=$?
 
 	if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
@@ -240,13 +241,14 @@ update_payload_check() {
 	P2=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
 	P3=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
 
+	OVER=$(cat $MASTER_DB/$CUST/$SITE/payload/.version)
+
 	if [ "x$P1" != "x0" ] || [ "x$P2" != "x0" ] || [ "x$P3" != "x0" ]; then
 		
-		VER=$(cat $MASTER_DB/$CUST/$SITE/payload/.version)
-	        VER=$((VER + 1))
-	        echo $VER > $MASTER_DB/$CUST/$SITE/payload/.version
+	        NVER=$((OVER + 1))
+	        echo $NVER > $MASTER_DB/$CUST/$SITE/payload/.version
 	        
-		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
+		run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
 		PAYLOAD_UPDATE_RET=$?
 
 		if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
@@ -258,9 +260,9 @@ update_payload_check() {
 		        exit 1 
 	        fi
 
-		PAYLOAD_UPDATE_STATUS="Updated"
+		PAYLOAD_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
 	else
-		PAYLOAD_UPDATE_STATUS="Unmodified"
+		PAYLOAD_UPDATE_STATUS="No Change (v$OVER)"
 	fi
 }
 

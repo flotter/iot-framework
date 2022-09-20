@@ -12,7 +12,7 @@ source $CPWD/common/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-cloud-update-settings.log
+LOG=$MASTER_DB/iot-domain-cloud-update-payload.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,7 +57,7 @@ done
 log "Started"
 
 pl
-pg "iot-domain-cloud-update-settings ($VERSION)"
+pg "iot-domain-cloud-update-payload ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
@@ -65,7 +65,7 @@ if [ "$HELP" == "true" ]; then
 	pl
         pn "Upload the domain settings to the cloud."
         pl
-	pn "iot-domain-cloud-update-settings [-v] [-h] ..."
+	pn "iot-domain-cloud-update-payload [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -135,7 +135,7 @@ else
 fi
 
 
-pg ":: Domain Settings Verification ::"
+pg ":: Domain Payload Verification ::"
 pl
 
 
@@ -152,25 +152,24 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	pnn "Domain : "
 	pg $CUST/$SITE
 
-	pnn "- Settings location valid : "
-	if [ -d $MASTER_DB/$DOMAIN_NEXT/settings ]; then
+	pnn "- Payload location valid : "
+	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
 		pg "Yes"
 	else
 		pr "No"
 		pl
-		pr "Error: Settings folder does not exist"
+		pr "Error: Payload folder does not exist"
 		exit 1
 	fi
 	
-	pnn "- Netplan verification : "
-	netplan_verify $CUST $SITE
+	pnn "- Payload size check : "
 	pg "Done"
 
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
 done
 
 pl
-pg ":: Domain Settings Cloud Update ::"
+pg ":: Domain Payload Cloud Update ::"
 pl
 
 DOMAINS_COUNT=0
@@ -185,12 +184,12 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	pnn "Domain : "
 	pg $CUST/$SITE
 
-	pnn "- Publishing Domain Settings : "
-	update_settings_check
+	pnn "- Publishing Domain Payload : "
+	update_payload_check
 	pg "Done"
 
 	pnn "- Change Status : "
-	pg "$SETTINGS_UPDATE_STATUS"
+	pg "$PAYLOAD_UPDATE_STATUS"
 	
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
 
