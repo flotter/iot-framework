@@ -547,3 +547,76 @@ select_device() {
 	        exit 1
 	fi
 }
+
+select_remote_fw() {
+
+	log "Selecting Remote FW"
+
+	EXTRA="$1"
+	FIRMWARES_REMOTE=()
+	REMOTE=($(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/$DEVICE/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p'))
+	if [ ! -z "$EXTRA" ]; then
+		FIRMWARES_REMOTE+=("$EXTRA")	
+	fi
+	if [ ${#REMOTE[@]} -gt 0 ]; then
+		FIRMWARES_REMOTE+=($(echo ${REMOTE[@]} | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
+	fi
+
+	FIRMWARES_REMOTE_MAX=${#FIRMWARES_REMOTE[@]}
+	SELECT=$FIRMWARES_REMOTE_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $FIRMWARES_REMOTE_MAX ]; do
+	
+	        if [ $FIRMWARES_REMOTE_MAX -eq 0 ]; then
+	                break
+	        fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select remote firmware from the list:"
+	        COUNT=0
+	        while [ $COUNT -lt $FIRMWARES_REMOTE_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_REMOTE[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	FIRMWARE_REMOTE=${FIRMWARES_REMOTE[$SELECT]}
+	
+	if [ -z "$FIRMWARE_REMOTE" ]; then
+	        pl
+	        pr "Error: No valid remote firmware found."
+	        pl
+	        exit 1
+	fi
+	
+	if [ "$FIRMWARE_REMOTE" = "$EXTRA" ]; then
+		# This is an extra option, so empty
+		FIRMWARE_REMOTE=
+	fi
+}
+
+download_remote_fw_check() {
+	FW=$1
+	TARGET_DIR=$2
+        run s3cmd --config $S3_ALL get $FW $TARGET_DIR
+        RET=$?
+        if [ $RET -ne 0 ]; then
+		pr "Fail"
+                pl
+                pr "Remote firmware download failed (Ret: $RET)"
+		pl
+
+                exit 1
+        fi
+}

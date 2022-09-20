@@ -113,7 +113,7 @@ pl
 
 DEVICE=$(device)
 
-if [ -z "$DEVICE" ] || [ ! -d $REPO_ROOT/firmware/$DEVICE ]; then
+if [ -z "$DEVICE" ] || [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
 
 	if [ "x$ADMIN" == "x1" ]; then
 
@@ -132,6 +132,49 @@ fi
 pl
 pg ":: Firmware Selection ::"
 pl
+
+select_remote_fw "*** Select locally built firmware instead ***"
+
+if [ ! -z "$FIRMWARE_REMOTE" ]; then
+
+	pnn "Processing Remote Firmware : "
+	pg "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz"
+
+	pnn "- Downloading : "
+	run mkdir -p $IOT_DOWNLOAD_DIR
+	run rm -rf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz
+	download_remote_fw_check "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz" $IOT_DOWNLOAD_DIR/
+	pg "Done"
+
+	pnn "- Decompressing : "
+	run mkdir -p $IOT_FW_DIR
+        run rm -rf $IOT_FW_DIR/$FIRMWARE_REMOTE
+        run tar xvzf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz -C $IOT_FW_DIR/
+	RET=$?
+	if [ $RET -ne 0 ]; then
+                pr "Fail"
+                pl
+                pr "Failed to decompress remote firmware (Ret: $RET)"
+                pl
+
+                exit 1
+        fi
+
+	run rm -rf $IOT_FW_DIR/tmp.img
+	mv $IOT_FW_DIR/$FIRMWARE_REMOTE $IOT_FW_DIR/tmp.img
+	pg "Done"
+
+	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$FIRMWARE_REMOTE
+	FIRMWARE_NAME=$IOT_FW_DIR/tmp.img
+else
+	:
+fi
+
+echo ">> $FIRMWARE_REMOTE <<"
+echo ">> $FIRMWARE_NAME <<"
+echo ">> $FIRMWARE_NAME_FINAL <<"
+exit 1
+
 
 LOCAL_FIRMWARE_MSG="*** Select locally built image instead ***"
 FIRMWARES_REMOTE=("$LOCAL_FIRMWARE_MSG" $(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | grep $DEVICE | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
@@ -165,19 +208,17 @@ FIRMWARE_REMOTE=${FIRMWARES_REMOTE[$SELECT]}
 
 if [ "$FIRMWARE_REMOTE" = "$LOCAL_FIRMWARE_MSG" ]; then
 
-	pn
-	pg ":: LOCAL IMAGE SELECTION ::"
-	pn
-
-	mkdir -p $IMAGE_INPUT_DIR
-	IMAGES=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz))
+	mkdir -p $IOT_BUILD_DIR
+	FIRMWARES_LOCAL=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz | grep $DEVICE))
 	COUNT=0
-	COUNT_MAX=${#IMAGES[@]}
+	COUNT_MAX=${#FIRMWARES_LOCAL[@]}
 	SELECT=$COUNT_MAX
 	ITER=0
 
 	if [ $COUNT_MAX -eq 0 ]; then
-		pr "No images in $IMAGE_INPUT_DIR"
+		pl
+		pr "No locally built images available."
+		pl
 		exit 1
 	fi
 
@@ -191,18 +232,18 @@ if [ "$FIRMWARE_REMOTE" = "$LOCAL_FIRMWARE_MSG" ]; then
 
 		COUNT=0
 		while [ $COUNT -lt $COUNT_MAX ]; do
-			pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
+			pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_LOCAL[$COUNT]}"
 			COUNT=$((COUNT + 1))
 		done
 
-
-		read -n 1 -s SELECT
-		SELECT=$((SELECT - 1))
-		ITER=$((ITER + 1))
+        	pl
+        	pnn "Choice? : "
+        	read SELECT
+        	SELECT=$((SELECT - 1))
+        	ITER=$((ITER + 1))
 	done
-	IMAGE_INPUT=$IMAGE_INPUT_DIR/${IMAGES[$SELECT]}
+	FIRMWARE=$IOT_BUILD_DIR/${FIRMWARES_LOCAL[$SELECT]}
 else
-	# Remote image download and extract
 	pl
 	pnn "- Downloading image from S3 (2.5GB takes time...) : "
 	run rm -rf $IMAGE_INPUT_DIR
