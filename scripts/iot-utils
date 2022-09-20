@@ -595,7 +595,7 @@ select_remote_fw() {
 	
 	if [ -z "$FIRMWARE_REMOTE" ]; then
 	        pl
-	        pr "Error: No valid remote firmware found."
+	        pr "Error: No valid remote firmware found for device: $DEVICE."
 	        pl
 	        exit 1
 	fi
@@ -607,6 +607,8 @@ select_remote_fw() {
 }
 
 download_remote_fw_check() {
+	log "Download Remote FW"
+
 	FW=$1
 	TARGET_DIR=$2
         run s3cmd --config $S3_ALL get $FW $TARGET_DIR
@@ -619,4 +621,50 @@ download_remote_fw_check() {
 
                 exit 1
         fi
+}
+
+select_local_fw() {
+
+	log "Selecting Local FW"
+
+	mkdir -p $IOT_BUILD_DIR/$DEVICE
+	FIRMWARES_LOCAL=($(ls $IOT_BUILD_DIR/$DEVICE))
+
+	FIRMWARES_LOCAL_MAX=${#FIRMWARES_LOCAL[@]}
+	SELECT=$FIRMWARES_LOCAL_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $FIRMWARES_LOCAL_MAX ]; do
+	
+	        if [ $FIRMWARES_LOCAL_MAX -eq 0 ]; then
+	                break
+	        fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select locally built firmware from the list:"
+	        COUNT=0
+	        while [ $COUNT -lt $FIRMWARES_LOCAL_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_LOCAL[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	FIRMWARE_LOCAL=${FIRMWARES_LOCAL[$SELECT]}
+	
+	if [ -z "$FIRMWARE_LOCAL" ]; then
+	        pl
+	        pr "Error: No valid locally built firmware found for device: $DEVICE"
+	        pl
+	        exit 1
+	fi
 }

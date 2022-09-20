@@ -134,19 +134,20 @@ pg ":: Firmware Selection ::"
 pl
 
 select_remote_fw "*** Select locally built firmware instead ***"
+pl
 
 if [ ! -z "$FIRMWARE_REMOTE" ]; then
 
-	pnn "Processing Remote Firmware : "
+	pnn "- Remote Firmware : "
 	pg "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz"
 
-	pnn "- Downloading : "
+	pnn "- Firmware Downloading : "
 	run mkdir -p $IOT_DOWNLOAD_DIR
 	run rm -rf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz
 	download_remote_fw_check "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz" $IOT_DOWNLOAD_DIR/
 	pg "Done"
 
-	pnn "- Decompressing : "
+	pnn "- Firmware Decompressing : "
 	run mkdir -p $IOT_FW_DIR
         run rm -rf $IOT_FW_DIR/$FIRMWARE_REMOTE
         run tar xvzf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz -C $IOT_FW_DIR/
@@ -159,442 +160,201 @@ if [ ! -z "$FIRMWARE_REMOTE" ]; then
 
                 exit 1
         fi
-
-	run rm -rf $IOT_FW_DIR/tmp.img
-	mv $IOT_FW_DIR/$FIRMWARE_REMOTE $IOT_FW_DIR/tmp.img
 	pg "Done"
 
-	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$FIRMWARE_REMOTE
+	pnn "- Ready for commissioning : "
+	run rm -rf $IOT_FW_DIR/tmp.img
+	mv $IOT_FW_DIR/$FIRMWARE_REMOTE $IOT_FW_DIR/tmp.img
+	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_REMOTE
 	FIRMWARE_NAME=$IOT_FW_DIR/tmp.img
+	pg "Yes"
 else
-	:
+	select_local_fw
+	pl
+	
+	pnn "- Local Firmware : "
+	pg "$IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL"
+	
+	pnn "- Ready for commissioning : "
+	run rm -rf $IOT_FW_DIR/tmp.img
+	cp $IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL $IOT_FW_DIR/tmp.img
+	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_LOCAL
+	FIRMWARE_NAME=$IOT_FW_DIR/tmp.img
+	pg "Yes"
 fi
 
-echo ">> $FIRMWARE_REMOTE <<"
+pl
+pg ":: Domain Selection ::"
+pl
+
+DOMAIN=$(domain)
+
+if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		CUST_WILDCARD="*** All Customers IDs and Site IDs (dangerous) ***"
+		select_domain_cust "$CUST_WILDCARD"
+		pl
+
+		if [ ! -z "$CUST" ]; then
+			SITE_WILDCARD="*** All Site IDs for selected Customer ID (dangerous) ***"
+			select_domain_site "$SITE_WILDCARD"
+			pl
+
+			pnn "- Domain selected : "
+			if [ -z "$SITE" ]; then
+				pg "$CUST/*"
+			else
+				pg "$CUST/$SITE"
+			fi
+			pl
+		else
+			SITE=
+			pnn "- Domain selected : "
+			pg "*/*"
+			pl
+		fi
+
+		domain_iterate
+	else
+		pl
+		pr "No default domain is set. Without Admin mode we cannot proceed."
+		pl
+		exit 1
+	fi
+else
+	# Single Default domain (Non-admin mode compatible)
+	DOMAINS=($DOMAIN)
+	pnn "- Domain selected : "
+	pg "$DOMAIN"
+	pl
+fi
+
+pg ":: Domain Settings Verification ::"
+pl
+
+
+DOMAINS_MAX=${#DOMAINS[@]}
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+	
+	pnn "- Domain ($DOMAIN_NEXT) settings location valid : "
+	if [ -d $MASTER_DB/$DOMAIN_NEXT/settings ]; then
+		pg "Yes"
+	else
+		pr "No"
+		pl
+		pr "Error: Settings folder does not exist"
+		exit 1
+	fi
+	
+	pnn "- Domain ($DOMAIN_NEXT) Netplan verification : "
+	netplan_verify $CUST $SITE
+	pg "Done"
+
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+done
+
+pl
+pg ":: Domain Settings Cloud Update ::"
+pl
+
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+
+	pnn "- Domain ($DOMAIN_NEXT) publish settings : "
+	update_settings_check
+	pg "Done"
+
+	pnn "- Domain ($DOMAIN_NEXT) change status : "
+	pg "$SETTINGS_UPDATE_STATUS"
+	
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+
+done
+
+pl
+pg ":: Domain Payload Verification ::"
+pl
+
+DOMAINS_MAX=${#DOMAINS[@]}
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+	
+	pnn "- Domain ($DOMAIN_NEXT) payload location valid : "
+	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
+		pg "Yes"
+	else
+		pr "No"
+		pl
+		pr "Error: Payload folder does not exist"
+		exit 1
+	fi
+	
+	pnn "- Domain ($DOMAIN_NEXT) payload size check : "
+	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
+	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
+		pr "Fail"
+		pl
+		pr "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
+		
+		log "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
+		
+		exit 1
+	fi
+	pg "Done"
+
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+done
+
+pl
+pg ":: Domain Payload Cloud Update ::"
+pl
+
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+
+	pnn "- Domain ($DOMAIN_NEXT) publish payload : "
+	update_payload_check
+	pg "Done"
+
+	pnn "- Domain ($DOMAIN_NEXT) change status : "
+	pg "$PAYLOAD_UPDATE_STATUS"
+	
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+
+done
+
+pl
 echo ">> $FIRMWARE_NAME <<"
 echo ">> $FIRMWARE_NAME_FINAL <<"
 exit 1
 
-
-LOCAL_FIRMWARE_MSG="*** Select locally built image instead ***"
-FIRMWARES_REMOTE=("$LOCAL_FIRMWARE_MSG" $(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | grep $DEVICE | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
-COUNT=0
-COUNT_MAX=${#FIRMWARES_REMOTE[@]}
-SELECT=$COUNT_MAX
-ITER=0
-
-while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
-
-	if [ $ITER -ne 0 ]; then
-		pl
-		pr "Error: Your choice is invalid!\n"
-		pl
-	fi 
-
-	pn "Please select remote firmware from the list:"
-	COUNT=0
-	while [ $COUNT -lt $COUNT_MAX ]; do
-		pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_REMOTE[$COUNT]}"
-		COUNT=$((COUNT + 1))
-	done
-
-        pl
-        pnn "Choice? : "
-        read SELECT
-        SELECT=$((SELECT - 1))
-        ITER=$((ITER + 1))
-done
-FIRMWARE_REMOTE=${FIRMWARES_REMOTE[$SELECT]}
-
-if [ "$FIRMWARE_REMOTE" = "$LOCAL_FIRMWARE_MSG" ]; then
-
-	mkdir -p $IOT_BUILD_DIR
-	FIRMWARES_LOCAL=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz | grep $DEVICE))
-	COUNT=0
-	COUNT_MAX=${#FIRMWARES_LOCAL[@]}
-	SELECT=$COUNT_MAX
-	ITER=0
-
-	if [ $COUNT_MAX -eq 0 ]; then
-		pl
-		pr "No locally built images available."
-		pl
-		exit 1
-	fi
-
-	while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
-
-		if [ $ITER -ne 0 ]; then
-			pl
-			pr "Error: Your choice is invalid!\n"
-			pl
-		fi 
-
-		COUNT=0
-		while [ $COUNT -lt $COUNT_MAX ]; do
-			pn "[$(printf "%2d" $((COUNT + 1)))] ${FIRMWARES_LOCAL[$COUNT]}"
-			COUNT=$((COUNT + 1))
-		done
-
-        	pl
-        	pnn "Choice? : "
-        	read SELECT
-        	SELECT=$((SELECT - 1))
-        	ITER=$((ITER + 1))
-	done
-	FIRMWARE=$IOT_BUILD_DIR/${FIRMWARES_LOCAL[$SELECT]}
-else
-	pl
-	pnn "- Downloading image from S3 (2.5GB takes time...) : "
-	run rm -rf $IMAGE_INPUT_DIR
-	run rm -rf $IMAGE_DL_DIR
-	mkdir -p $IMAGE_INPUT_DIR
-	mkdir -p $IMAGE_DL_DIR
-	run s3cmd --config $S3_ALL get $S3_DEVICE_FW/$IMAGE_INPUT.tar.gz $IMAGE_DL_DIR/ 
-	RET=$?
-	if [ $RET -ne 0 ]; then
-		pl
-		pr "IMAGE: Download failed (Ret: $RET)"
-		exit 1
-	fi
-	pg "DONE"
-	pnn "- Decompressing image (takes time...): "
-	if [ ! -f $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz ]; then
-		pl
-		pr "IMAGE: Not found (Image: $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz)"
-		exit 1
-	else
-		run rm -rf $IMAGE_INPUT_DIR/$IMAGE_INPUT
-		run tar xvzf $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz -C $IMAGE_INPUT_DIR/
-		IMAGE_INPUT=$IMAGE_INPUT_DIR/$IMAGE_INPUT
-	fi
-	pg "DONE"
-
-fi
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-COMM_VERSION="v1.0.0"
-DATE=$(date +"%d_%m_%y__%H_%M_%S")
-IMAGE_INPUT_DIR=$CPWD/images/rpi
-IMAGE_DL_DIR=$CPWD/downloads/rpi
-
-S3_ALL=$CPWD/security/s3/.s3cfg-all
-S3_DEVICE_FW="s3://iot-device-fw/rpi"
-S3_DEVICE_DL="s3://iot-device-download"
-S3_DEVICE_UL="s3://iot-device-upload"
-S3_SOURCE=$CPWD/data
-
-# 1MB blocks
-PAYLOAD_MAX_SIZE=1024
-
-LOG=$S3_SOURCE/commission-log.txt
-
-P_RESET="\e[0m"
-P_RED="\e[31m"
-P_GREEN="\e[32m"
-
-### MACROS ###
-
-run() {
-        if $VERBOSE; then
-                v=$(exec 2>&1 && set -x && set -- "$@")
-                echo "#${v#*--}"
-                "$@"
-        else
-                "$@" >/dev/null 2>&1
-        fi
-}
-
-function pl() {
-	echo -e "$P_RESET"
-}
-
-function pn() {
-	echo -e "$P_RESET$@"
-}
-
-function pr() {
-	echo -e "$P_RED$@$P_RESET"
-}
-
-function pg() {
-	echo -e "$P_GREEN$@$P_RESET"
-}
-
-function pnn() {
-	echo -ne "$P_RESET$@"
-}
-
-function prn() {
-	echo -ne "$P_RED$@$P_RESET"
-}
-
-function pgn() {
-	echo -ne "$P_GREEN$@$P_RESET"
-}
-
-function exitbuild() {
-	if [ "x$SOURCED" == "x1" ]; then
-		return 1
-	else
-		exit 1
-	fi
-}
-
-### OPTIONS ###
-
-
-
-pn
-pg ":: ENVIRONMENT SETUP ::"
-pn
-
-pnn "- Running as user : "
-pg $SUDO_USER
-
-pnn "- Running with SUDO : "
-ID=$(id -u)
-if [ "x$ID" == "x0" ]; then
-    pg "YES"
-else
-    pr "NO"
-    exitbuild
-fi
-
-pnn "- Disabling automount : "
-gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
-pg "DONE"
-
-pnn "- Cleaning up environment for commissioning : "
-rm -rf $CPWD/mnt
-pg "DONE"
-
-pnn "- Installing missing components : "
-
-run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ffmpeg
-run apt-get install -y python3-pip
-run python3 -m pip install --upgrade pip
-run python3 -m pip install s3cmd
-run python3 -m pip install ffmpeg-normalize
-
-pg "DONE"
-
-### CONFIRM CLOUD IN SYNC
-
-pl
-pn "You are about to commission an IOT device using the local (master) copy"
-pn "of the database. In order for the unit to function as intended, the cloud"
-pn "database must be in sync."
-pl
-pr "Do you want to go ahead with commissioning?"
-pl
-pnn "Type 'ok' and Enter to continue : "
-read SELECT
-
-if [ "x$SELECT" != "xok" ]; then
-	pl
-	pr "Commissioning aborted"
-	exit 1
-fi
-
-### 1. GET IMAGE ###
-
-pl
-pg ":: REMOTE IMAGE SELECTION ::"
-pl
-pn "Note: Selecting a remote image deletes all local images"
-pl
-
-if [ "x$IMAGE_INPUT" == "x" ] || [ ! -f "$IMAGE_INPUT" ]; then
-	mkdir -p $IMAGE_INPUT_DIR
-	IMAGES=($(s3cmd --config $S3_ALL ls $S3_DEVICE_FW/ | sed -n 's/.*\(s3:\/\/.*.tar.gz$\)/\1/p' | xargs -n 1 basename | sed -n 's/.tar.gz//p'))
-	IMAGES=(${IMAGES[@]} "* Local Images *")
-	COUNT=0
-	COUNT_MAX=${#IMAGES[@]}
-	SELECT=$COUNT_MAX
-	ITER=0
-
-	if [ $COUNT_MAX -eq 0 ]; then
-		pr "No images in $IMAGE_INPUT_DIR"
-		exit 1
-	fi
-
-	while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
-
-		if [ $ITER -ne 0 ]; then
-			pl
-			pr "Error: Your choice is invalid!\n"
-			pl
-		fi 
-
-		COUNT=0
-		while [ $COUNT -lt $COUNT_MAX ]; do
-			pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
-			COUNT=$((COUNT + 1))
-		done
-
-
-		read -n 1 -s SELECT
-		SELECT=$((SELECT - 1))
-		ITER=$((ITER + 1))
-	done
-	IMAGE_INPUT=${IMAGES[$SELECT]}
-
-	if [ "x$((SELECT + 1))" == "x$COUNT_MAX" ]; then
-	
-		pn
-		pg ":: LOCAL IMAGE SELECTION ::"
-		pn
-	
-		mkdir -p $IMAGE_INPUT_DIR
-		IMAGES=($(ls $IMAGE_INPUT_DIR | grep -v tar.gz))
-		COUNT=0
-		COUNT_MAX=${#IMAGES[@]}
-		SELECT=$COUNT_MAX
-		ITER=0
-	
-		if [ $COUNT_MAX -eq 0 ]; then
-			pr "No images in $IMAGE_INPUT_DIR"
-			exit 1
-		fi
-	
-		while [ $SELECT -lt 0 ] || [ $SELECT -ge $COUNT_MAX ] ; do
-	
-			if [ $ITER -ne 0 ]; then
-				pl
-				pr "Error: Your choice is invalid!\n"
-				pl
-			fi 
-	
-			COUNT=0
-			while [ $COUNT -lt $COUNT_MAX ]; do
-				pn "[$((COUNT + 1))] ${IMAGES[$COUNT]}"
-				COUNT=$((COUNT + 1))
-			done
-	
-	
-			read -n 1 -s SELECT
-			SELECT=$((SELECT - 1))
-			ITER=$((ITER + 1))
-		done
-		IMAGE_INPUT=$IMAGE_INPUT_DIR/${IMAGES[$SELECT]}
-	else
-		# Remote image download and extract
-		pl
-		pnn "- Downloading image from S3 (2.5GB takes time...) : "
-		run rm -rf $IMAGE_INPUT_DIR
-		run rm -rf $IMAGE_DL_DIR
-		mkdir -p $IMAGE_INPUT_DIR
-		mkdir -p $IMAGE_DL_DIR
-		run s3cmd --config $S3_ALL get $S3_DEVICE_FW/$IMAGE_INPUT.tar.gz $IMAGE_DL_DIR/ 
-		RET=$?
-		if [ $RET -ne 0 ]; then
-			pl
-			pr "IMAGE: Download failed (Ret: $RET)"
-			exit 1
-		fi
-		pg "DONE"
-		pnn "- Decompressing image (takes time...): "
-		if [ ! -f $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz ]; then
-			pl
-			pr "IMAGE: Not found (Image: $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz)"
-			exit 1
-		else
-			run rm -rf $IMAGE_INPUT_DIR/$IMAGE_INPUT
-			run tar xvzf $IMAGE_DL_DIR/$IMAGE_INPUT.tar.gz -C $IMAGE_INPUT_DIR/
-			IMAGE_INPUT=$IMAGE_INPUT_DIR/$IMAGE_INPUT
-		fi
-		pg "DONE"
-
-	fi
-else
-	pn "Supplied via command-line options"
-fi
-
-### 1. GET CUSTOMER ###
-
-pn
-pg ":: CUSTOMER SELECTION ::"
-pn
-
-
-# Only show the list if no valid selection was specified
-if [ "x$CUST_INPUT" == "x" ] || [ ! -d "$S3_SOURCE/$CUST_INPUT" ]; then
-	
-	CUST_LIST=($(ls $S3_SOURCE | grep cust-))
-	CUST_LIST_MAX=${#CUST_LIST[@]}
-	SELECT=$CUST_LIST_MAX
-	ITER=0
-	
-	while [ $SELECT -lt 0 ] || [ $SELECT -ge $CUST_LIST_MAX ] ; do
-	
-		if [ $ITER -ne 0 ]; then
-			pl
-			pr "Error: Your choice is invalid!\n"
-			pl
-		fi 
-	
-		COUNT=0
-		while [ $COUNT -lt $CUST_LIST_MAX ]; do
-			pn "[$((COUNT + 1))] ${CUST_LIST[$COUNT]}"
-			COUNT=$((COUNT + 1))
-		done
-	
-		read -n 1 -s SELECT
-		SELECT=$((SELECT - 1))
-		ITER=$((ITER + 1))
-	done
-	CUST_INPUT=${CUST_LIST[$SELECT]}
-else
-	pn "Supplied via command-line options"
-fi
-
-pn
-pg ":: SITE SELECTION ::"
-pn
-
-# Only show the list if no valid selection was specified
-if [ "x$SITE_INPUT" == "x" ] || [ ! -d "$S3_SOURCE/$SITE_INPUT" ]; then
-
-	SITE_LIST=($(ls $S3_SOURCE/$CUST_INPUT | grep site-))
-	SITE_LIST_MAX=${#SITE_LIST[@]}
-	SELECT=$SITE_LIST_MAX
-	ITER=0
-	
-	while [ $SELECT -lt 0 ] || [ $SELECT -ge $SITE_LIST_MAX ]; do
-	
-		if [ $ITER -ne 0 ]; then
-			pl
-			pr "Error: Your choice is invalid!\n"
-			pl
-		fi 
-	
-		COUNT=0
-		while [ $COUNT -lt $SITE_LIST_MAX ]; do
-			pn "[$((COUNT + 1))] ${SITE_LIST[$COUNT]}"
-			COUNT=$((COUNT + 1))
-		done
-	
-		read -n 1 -s SELECT
-		SELECT=$((SELECT - 1))
-		ITER=$((ITER + 1))
-	done
-	SITE_INPUT=${SITE_LIST[$SELECT]}
-else
-	pn "Supplied via command-line options"
-fi
 
 pl
 pnn "- Image selected : "

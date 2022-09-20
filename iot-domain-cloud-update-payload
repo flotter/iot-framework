@@ -117,8 +117,19 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 			SITE_WILDCARD="*** All Site IDs for selected Customer ID (dangerous) ***"
 			select_domain_site "$SITE_WILDCARD"
 			pl
+
+			pnn "- Domain selected : "
+			if [ -z "$SITE" ]; then
+				pg "$CUST/*"
+			else
+				pg "$CUST/$SITE"
+			fi
+			pl
 		else
 			SITE=
+			pnn "- Domain selected : "
+			pg "*/*"
+			pl
 		fi
 
 		domain_iterate
@@ -131,7 +142,8 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 else
 	# Single Default domain (Non-admin mode compatible)
 	DOMAINS=($DOMAIN)
-	pn "Default domain selected : $DOMAIN"
+	pnn "- Domain selected : "
+	pg "$DOMAIN"
 	pl
 fi
 
@@ -150,10 +162,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	CUST=$(dirname $DOMAIN_NEXT)
 	SITE=$(basename $DOMAIN_NEXT)
 	
-	pnn "Domain : "
-	pg $CUST/$SITE
-
-	pnn "- Payload location valid : "
+	pnn "- Domain ($DOMAIN_NEXT) payload location valid : "
 	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
 		pg "Yes"
 	else
@@ -163,7 +172,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 		exit 1
 	fi
 	
-	pnn "- Payload size check : "
+	pnn "- Domain ($DOMAIN_NEXT) payload size check : "
 	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
 	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
 		pr "Fail"
@@ -192,14 +201,11 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	CUST=$(dirname $DOMAIN_NEXT)
 	SITE=$(basename $DOMAIN_NEXT)
 
-	pnn "Domain : "
-	pg $CUST/$SITE
-
-	pnn "- Publishing Domain Payload : "
+	pnn "- Domain ($DOMAIN_NEXT) publish payload : "
 	update_payload_check
 	pg "Done"
 
-	pnn "- Change Status : "
+	pnn "- Domain ($DOMAIN_NEXT) change status : "
 	pg "$PAYLOAD_UPDATE_STATUS"
 	
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
