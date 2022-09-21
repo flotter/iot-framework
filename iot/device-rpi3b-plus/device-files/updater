@@ -93,7 +93,7 @@ else
         # Ensure time is good
 	ntpdate -v ntp.ubuntu.com
 
-	if [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/.cust ] && [ -f /run/commission/.site ]; then
+	if [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
 
 		# Update Start
 		TS="$(date)"
@@ -106,7 +106,7 @@ else
 		echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
 		echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
 
-		s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+		s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-update.txt
 		
 		# We only dump logs if enabled
 		DEBUG_LOGS=$(cat /run/settings/.update | grep debug-logs | sed -n 's/[^=]*=\(.*\)/\1/p')
@@ -132,7 +132,7 @@ else
 				echo "TRY NUMBER: $RETRY"
 	
 				echo "Updating Boot Logs"
-				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $BOOT_PATH.tar.gz s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-boot.tar.gz
+				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $BOOT_PATH.tar.gz s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-boot.tar.gz
 				RET=$?
 		
 				if [ $RET -ne 0 ]; then
@@ -171,7 +171,7 @@ else
 				echo "TRY NUMBER: $RETRY"
 	
 				echo "Updating Debug Logs"
-				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $DEBUG_PATH.tar.gz s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-debug.tar.gz
+				s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $DEBUG_PATH.tar.gz s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-debug.tar.gz
 				RET=$?
 		
 				if [ $RET -ne 0 ]; then
@@ -197,7 +197,7 @@ else
 			echo "TRY NUMBER: $RETRY"
 
 			echo "Updating Stats"
-			s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $STAT_DIR/$STAT_SOURCE s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$STAT_FILE
+			s3cmd -v --config /run/commission/.s3cfg-ctrl put --no-preserve $STAT_DIR/$STAT_SOURCE s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$STAT_FILE
 			RET=$?
 
 			if [ $RET -ne 0 ]; then
@@ -206,7 +206,7 @@ else
 			fi
 
 			echo "Updating Music"
-			s3cmd -v --config /run/commission/.s3cfg-music --no-check-md5 sync --no-preserve --delete-removed s3://ep-music/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/playlists /home/eplayer/enc_drive/update/
+			s3cmd -v --config /run/commission/.s3cfg-music --no-check-md5 sync --no-preserve --delete-removed s3://ep-music/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/playlists /home/eplayer/enc_drive/update/
 			RET=$?
 			if [ $RET -ne 0 ]; then
 				echo "Update attempt returned (Ret: $RET)"
@@ -242,7 +242,7 @@ else
 					echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
 					echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
 	
-					s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+					s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-update.txt
 					OIFS="$IFS"
 					IFS=$'\n'
 	
@@ -378,17 +378,17 @@ else
 					echo "Copying pre-normalized files done"
 				fi
 	
-				OLD_VERSION=$(cat /boot/firmware/eplayer/settings/.version)
+				OLD_VERSION=$(cat /boot/firmware/eplayer/settings/version.cfg)
 		
 				echo "Update Settings"
-				s3cmd -v --config /run/commission/.s3cfg-music sync --no-preserve s3://ep-settings/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/settings/ /boot/firmware/eplayer/settings/
+				s3cmd -v --config /run/commission/.s3cfg-music sync --no-preserve s3://ep-settings/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/settings/ /boot/firmware/eplayer/settings/
 				RET=$?
 				if [ $RET -ne 0 ]; then
 					echo "Update attempt returned (Ret: $RET)"
 					continue
 				fi
 		
-				NEW_VERSION=$(cat /boot/firmware/eplayer/settings/.version)
+				NEW_VERSION=$(cat /boot/firmware/eplayer/settings/version.cfg)
 
 				echo "OLD VERSION: $OLD_VERSION"
 				echo "NEW VERSION: $NEW_VERSION"
@@ -405,7 +405,7 @@ else
 				echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
 				echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
 				echo "INFO: Update Success" >> /run/.heartbeat
-				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-update.txt
 		
 				# Reboot to apply updates
 				reboot
@@ -421,7 +421,7 @@ else
 				echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
 				echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
 				echo "INFO: No Update" >> /run/.heartbeat
-				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-update.txt
+				s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-update.txt
 				
 				# No update continue to boot
 				break

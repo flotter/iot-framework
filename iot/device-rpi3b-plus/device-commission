@@ -28,8 +28,8 @@ device_commission() {
 	
 	pnn "- Setting domain : "
 	mkdir -p $CPWD/mnt/boot/iot/commission
-	echo "$CUST" > $CPWD/mnt/boot/iot/commission/.cust
-	echo "$SITE" > $CPWD/mnt/boot/iot/commission/.site
+	echo "$CUST" > $CPWD/mnt/boot/iot/commission/cust.cfg
+	echo "$SITE" > $CPWD/mnt/boot/iot/commission/site.cfg
 	pg "Done"
 	
 	pnn "- Setting hostname : "
@@ -37,8 +37,8 @@ device_commission() {
 	pg "Done"
 	
 	pnn "- Installing S3 user keys : "
-	run cp -f $CPWD/security/s3/.s3cfg-download $CPWD/mnt/boot/iot/commission/.s3cfg-download
-	run cp -f $CPWD/security/s3/.s3cfg-upload $CPWD/mnt/boot/iot/commission/.s3cfg-upload
+	run cp -f $CPWD/security/s3/s3cfg-download.cfg $CPWD/mnt/boot/iot/commission/s3cfg-download.cfg
+	run cp -f $CPWD/security/s3/s3cfg-upload.cfg $CPWD/mnt/boot/iot/commission/s3cfg-upload.cfg
 	pg "DONE"
 	
 	

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "Payload starting ..."
+
+python3 alarm.py

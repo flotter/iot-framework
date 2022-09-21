@@ -191,14 +191,16 @@ VERSION="$GITTAG-$GITHASH"
 # AWS S3 DEFINES                                     #
 #----------------------------------------------------#
 
-S3_ALL=$REPO_ROOT/security/s3/.s3cfg-all
+S3_ALL=$REPO_ROOT/security/s3/s3cfg-all.cfg
 S3_DEVICE_FW="s3://iot-device-fw"
 S3_DEVICE_DL="s3://iot-device-download"
 S3_DEVICE_UL="s3://iot-device-upload"
 
 update_settings_check() {
+	set +e
 	SETTINGS_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/ 2>&1)
 	SETTINGS_UPDATE_RET=$?
+	set -e
 
 	if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
 		err "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
@@ -208,19 +210,15 @@ update_settings_check() {
 	S2=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
 	S3=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
 
-	OVER=$(cat $MASTER_DB/$CUST/$SITE/settings/.version)
+	OVER=$(cat $MASTER_DB/$CUST/$SITE/settings/version.cfg)
 
 	if [ "x$S1" != "x0" ] || [ "x$S2" != "x0" ] || [ "x$S3" != "x0" ]; then
 		
 	        NVER=$((OVER + 1))
-	        echo $NVER > $MASTER_DB/$CUST/$SITE/settings/.version
+	        echo $NVER > $MASTER_DB/$CUST/$SITE/settings/version.cfg
 	        
 		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/
-		SETTINGS_UPDATE_RET=$?
-
-		if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
-			err "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
-	        fi
+		return_check "Settings version update for domain $CUST/$SITE failed."
 
 		SETTINGS_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
 	else
@@ -229,8 +227,10 @@ update_settings_check() {
 }
 
 update_payload_check() {
+	set +e
 	PAYLOAD_UPDATE=$(s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/ 2>&1)
 	PAYLOAD_UPDATE_RET=$?
+	set -e
 
 	if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
 		err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
@@ -240,16 +240,16 @@ update_payload_check() {
 	P2=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*upload, \([^ ]*\).*/\1/p')
 	P3=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*copy, \([^ ]*\).*/\1/p')
 
-	OVER=$(cat $MASTER_DB/$CUST/$SITE/payload/.version)
+	OVER=$(cat $MASTER_DB/$CUST/$SITE/payload/version.cfg)
 
 	if [ "x$P1" != "x0" ] || [ "x$P2" != "x0" ] || [ "x$P3" != "x0" ]; then
 		
 	        NVER=$((OVER + 1))
-	        echo $NVER > $MASTER_DB/$CUST/$SITE/payload/.version
-	        
+	        echo $NVER > $MASTER_DB/$CUST/$SITE/payload/version.cfg
+	       
 		run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
-		PAYLOAD_UPDATE_RET=$?
-
+		return_check "Payload version update for domain $CUST/$SITE failed."
+		
 		if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
 			err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
 	        fi
@@ -308,13 +308,13 @@ device_check() {
 
 netplan_verify() {
 	local NPVER=$(mktemp -d)
-	/lib/netplan/generate -r $NPVER $MASTER_DB/$1/$2/settings/.wifi
+	/lib/netplan/generate -r $NPVER $MASTER_DB/$1/$2/settings/networking.cfg
 	RET=$?
 
 	rm -rf $NPVER
 
 	if [ $RET -ne 0 ]; then
-		err "Wifi settings invalid ($1/$2/settings/.wifi)"
+		err "Wifi settings invalid ($1/$2/settings/networking.cfg)"
 	fi
 }
 

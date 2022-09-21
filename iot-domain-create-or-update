@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-create.log
+LOG=$MASTER_DB/iot-domain-create-or-update.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,17 +57,16 @@ done
 log "Started"
 
 pl
-pg "iot-domain-create ($VERSION)"
+pg "iot-domain-create-or-update ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Add new customers and customer sites. This creates a new"
-        pn "operational domain for devices, with its own settings and"
-        pn "payload."
+        pn "Create new domain with latest settings and payload, or update"
+	pn "the settings and payload of an existing domain."
         pl
-	pn "iot-domain-create [-v] [-h] ..."
+	pn "iot-domain-create-or-update [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -100,7 +99,7 @@ log "Admin OK"
 #----------------------------------------------------#
 
 pl
-pg ":: Add Domain Confirmation ::"
+pg ":: Add or Update Domain Confirmation ::"
 pl
 pnn "Type 'ok' and Enter to continue : "
 read SELECT
@@ -183,9 +182,8 @@ fi
 
 pl
 pn "If you select an existing Site ID, all the settings for"
-pn "the domain will be reset to defaults. Note that default"
-pn "settings (and payload) is not sufficient and requires"
-pn "manually tweaking some details (e.g. WIFI details)."
+pn "the domain will be updates to match the latest settings"
+pn "and payload."
 pl
 
 pnn "Create new Site ID? [y, N] "
@@ -251,9 +249,9 @@ pg ":: Final Confirmation ::"
 pl
 
 if [ -d $MASTER_DB/$CUST/$SITE ]; then
-	pn "The following domain already exist and will be reset:"
+	pn "The following domain already exist and will be updated:"
 
-	log "Domain exist and will be reset"
+	log "Domain exist and will be updated"
 else
 	pn "The following domain will be created:"
 
@@ -273,7 +271,7 @@ if [ "x$SELECT" != "xok" ]; then
 	err "User aborted."
 fi
 
-log "Adding or Resetting Customer ID: $CUST, Site ID: $SITE"
+log "Creating or Updating Customer ID: $CUST, Site ID: $SITE"
 
 pl
 pg ":: Performing Actions ::"
@@ -284,12 +282,18 @@ mkdir -p $MASTER_DB/$CUST/$SITE/payload
 mkdir -p $MASTER_DB/$CUST/$SITE/settings
 pg "Done"
 
-pnn "- Copying default settings : "
-run tar xvzf $IOT_DEVICE_DIR/settings.tar.gz -C $MASTER_DB/$CUST/$SITE/settings
+pnn "- Copying latest settings : "
+run cp -Rf $REPO_ROOT/settings/* -C $MASTER_DB/$CUST/$SITE/settings
+if [ ! -f $MASTER_DB/$CUST/$SITE/settings/version.cfg ]; then
+	echo "0" > $MASTER_DB/$CUST/$SITE/settings/version.cfg
+fi
 pg "Done"
 
-pnn "- Copying default payload : "
-run tar xvzf $IOT_DEVICE_DIR/payload.tar.gz -C $MASTER_DB/$CUST/$SITE/payload
+pnn "- Copying latest payload : "
+run cp -Rf $REPO_ROOT/payload/* -C $MASTER_DB/$CUST/$SITE/payload
+if [ ! -f $MASTER_DB/$CUST/$SITE/payload/version.cfg ]; then
+	echo "0" > $MASTER_DB/$CUST/$SITE/payload/version.cfg
+fi
 pg "Done"
 
 pl

@@ -74,7 +74,6 @@ fi
 # Setup payload directory structure
 mkdir -p $ENC_PATH/live
 mkdir -p $ENC_PATH/update
-mkdir -p $ENC_PATH/telemetry
 ln -snf $ENC_PATH/live $ENC_PAYLOAD
 
 # Encrypt the commissioning data under /boot/firmware
@@ -127,9 +126,9 @@ else
 fi
 
 # Install WIFI hotspots
-if [ -f /run/settings/.wifi ]; then
+if [ -f /run/settings/networking.cfg ]; then
 	echo "Copying WIFI settings for Netplan"
-	cp -f /run/settings/.wifi /etc/netplan/config.yaml
+	cp -f /run/settings/networking.cfg /etc/netplan/config.yaml
 fi
 
 echo "Apply WIFI settings for Netplan"

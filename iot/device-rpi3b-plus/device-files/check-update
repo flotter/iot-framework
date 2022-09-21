@@ -153,7 +153,7 @@ while [ true ]; do
 			ONLINE=1
 		fi
 		
-		if [ $ONLINE -eq 1 ] && [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/.cust ] && [ -f /run/commission/.site ]; then
+		if [ $ONLINE -eq 1 ] && [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
 			T="$(date)"
 			L=$(/bin/offline-version)
 			O=$(/bin/online-version)
@@ -164,15 +164,15 @@ while [ true ]; do
 			echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
 			echo "FW: $(cat /home/eplayer/.firmware_version)" >> /run/.heartbeat
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-heartbeat.txt
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat.txt
 			
 			journalctl -u ep -a -n 50 > /run/.heartbeat
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-ep.txt
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-ep.txt
 			
 			cat $REBOOT_DIR/$STAT_SOURCE | tail -n10 > /run/.heartbeat
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/.cust)/$(cat /run/commission/.site)/$SERIAL-player.txt
+			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-player.txt
 		fi		
 	else
 		echo "Not ready to update heartbeat (Delta: $BEAT_DELTA, Rate: $HEARTBEAT_RATE)"
