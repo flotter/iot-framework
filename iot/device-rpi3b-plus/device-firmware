@@ -11,6 +11,8 @@ BUILD_URL="https://cdimage.ubuntu.com/releases/22.04/release/$BUILD_IMAGE.img.xz
 BUILD_MD5SUM="dc31ea25236f3b47b24ccdd46c1cf4ee"
 BUILD_SIZE=4096 # MiB
 
+FIRMWARE_USER=iot
+
 #----------------------------------------------------#
 # COMMISSION                                         #
 #----------------------------------------------------#
@@ -105,52 +107,43 @@ device_firmware() {
 
 	pnn "- Mounting root filesystem : "
 	
-	LOOPDEV=$(losetup --show -P -f $CPWD/downloads/$BUILD_IMAGE.img)
-	mkdir -p $CPWD/mnt/boot
-	mkdir -p $CPWD/mnt/root
-	mount -o rw ${LOOPDEV}p2 $CPWD/mnt/root
-	mount -o rw ${LOOPDEV}p1 $CPWD/mnt/boot
+	LOOPDEV=$(losetup --show -P -f $FIRMWARE_NAME)
+	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/boot
+	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/root
+	mount -o rw ${LOOPDEV}p2 $IOT_BUILD_DIR/$DEVICE/mnt/root
+	mount -o rw ${LOOPDEV}p1 $IOT_BUILD_DIR/$DEVICE/mnt/boot
 	
 	pg "Done"
 	
 	pnn "- Preparing for foreign chroot : "
 	
-	mount --bind /dev $CPWD/mnt/root/dev/
-	mount --bind /sys $CPWD/mnt/root/sys/
-	mount --bind /proc $CPWD/mnt/root/proc/
-	mount --bind /dev/pts $CPWD/mnt/root/dev/pts
-	mkdir -p $CPWD/mnt/root/boot/firmware
-	mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
-	mkdir -p $CPWD/mnt/root/home/rpi/native-prepare
-	mount --bind $CPWD/firmware/rpi/native-prepare $CPWD/mnt/root/home/rpi/native-prepare
+	mount --bind /dev $IOT_BUILD_DIR/$DEVICE/mnt/root/dev/
+	mount --bind /sys $IOT_BUILD_DIR/$DEVICE/mnt/root/sys/
+	mount --bind /proc $IOT_BUILD_DIR/$DEVICE/mnt/root/proc/
+	mount --bind /dev/pts $IOT_BUILD_DIR/$DEVICE/mnt/root/dev/pts
+	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/root/boot/firmware
+	mount --bind $IOT_BUILD_DIR/$DEVICE/mnt/boot $IOT_BUILD_DIR/$DEVICE/mnt/root/boot/firmware
+	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
+	mount --bind $IOT_FW_DIR/$DEVICE/device-files $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
 	
-	mv $CPWD/mnt/root/etc/resolv.conf $CPWD/mnt/root/etc/resolv.conf.backup
-	echo "nameserver 8.8.8.8" > $CPWD/mnt/root/etc/resolv.conf
-	cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
-	cp -f $CPWD/firmware/rpi/native-prepare.sh $CPWD/mnt/root/home/rpi
-	echo "$BUILD_VERSION" > $CPWD/mnt/root/home/rpi/.firmware_version
+	mv $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf.backup
+	echo "nameserver 8.8.8.8" > $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf
+	cp -f /usr/bin/qemu-aarch64-static $IOT_BUILD_DIR/$DEVICE/mnt/root/usr/bin/
+	cp -f $IOT_FW_DIR/$DEVICE/device-prepare $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER
+
+	echo "PRODUCTION=$PRODUCTION" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	echo "VERSION=$VERSION" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	echo "DATE=$DATE" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	echo "DEBUG_SHELL=$DEBUG_SHELL" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	echo "VERBOSE=$VERBOSE" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
 	
-	echo "GEN_PRODUCTION=$PRODUCTION" >> $CPWD/mnt/root/home/rpi/native-input
-	echo "GEN_VERSION=$BUILD_VERSION" >> $CPWD/mnt/root/home/rpi/native-input
-	echo "GEN_DATE=$BUILD_DATE" >> $CPWD/mnt/root/home/rpi/native-input
-	echo "GEN_INTERACTIVE=$INTERACTIVE" >> $CPWD/mnt/root/home/rpi/native-input
-	echo "GEN_VERBOSE=$VERBOSE" >> $CPWD/mnt/root/home/rpi/native-input
-	
-	pg "DONE"
-	
-	if [ "x$INTERACTIVE" == "xtrue" ]; then
-		pl
-		py "[INPECTION POINT] Interactive terminal (type 'exit' to continue with native preparation) : "
-		pl
-		bash
-		pl
-	fi
+	pg "Done"
 	
 	pn
 	pg "Foreign chroot start"
 	pn
 	
-	chroot $CPWD/mnt/root /home/rpi/native-prepare.sh 
+	chroot $IOT_BUILD_DIR/$DEVICE/mnt/root /home/iot/device-prepare
 	
 	pn
 	pg "Foreign chroot end"
@@ -158,40 +151,40 @@ device_firmware() {
 	
 	pnn "- Cleaning up chroot : "
 	
-	rm -f $CPWD/mnt/root/home/rpi/native-prepare.sh
-	rm -f $CPWD/mnt/root/home/rpi/native-input
-	rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
-	rm -f $CPWD/mnt/root/etc/resolv.conf
-	mv $CPWD/mnt/root/etc/resolv.conf.backup $CPWD/mnt/root/etc/resolv.conf
+	rm -f $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-prepare
+	rm -f $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	rm -f $IOT_BUILD_DIR/$DEVICE/mnt/root/usr/bin/qemu-aarch64-static
+	rm -f $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf
+	mv $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf.backup $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf
 	
 	sync
 	
-	umount $CPWD/mnt/root/home/rpi/native-prepare
-	rm -rf $CPWD/mnt/root/home/rpi/native-prepare
-	umount $CPWD/mnt/root/boot/firmware
-	umount $CPWD/mnt/root/dev/pts
-	umount $CPWD/mnt/root/dev/
-	umount $CPWD/mnt/root/sys/
-	umount $CPWD/mnt/root/proc/
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
+	rm -rf $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/boot/firmware
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/dev/pts
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/dev/
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/sys/
+	umount $IOT_BUILD_DIR/$DEVICE/mnt/root/proc/
 	
-	pg "DONE"
+	pg "Done"
 	
 	
-	pnn "- Waiting for depedencies (5sec) : "
+	pnn "- Waiting for depedencies : "
 	
 	sync
 	sleep 5
 	
-	pg "OK"
+	pg "Done"
 	
 	pnn "- Unmounting root filesystem : "
 	
 	umount ${LOOPDEV}p1
 	umount ${LOOPDEV}p2
-	rm -d $CPWD/mnt/boot
-	rm -d $CPWD/mnt/root
-	rm -d $CPWD/mnt
+	rm -d $IOT_BUILD_DIR/$DEVICE/mnt/boot
+	rm -d $IOT_BUILD_DIR/$DEVICE/mnt/root
+	rm -d $IOT_BUILD_DIR/$DEVICE/mnt
 	run losetup -d ${LOOPDEV}
 	
-	pg "DONE"
+	pg "Done"
 }

@@ -1,12 +1,12 @@
 [Unit]
-Description="HW Checker"
-After=ep-update.service
-Wants=ep-update.service
+Description="Payload hardware checker"
+After=updater.service
+Wants=updater.service
 
 [Service]
 Type=simple
 User=root
-ExecStart=/bin/player-hw-test
+ExecStart=/bin/payload-hw-check
 Restart=always
 RestartSec=5
 StandardOutput=journal

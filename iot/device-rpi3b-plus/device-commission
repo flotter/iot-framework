@@ -49,16 +49,13 @@ device_commission() {
 
 	pnn "- Commissioning payload : "
 	
-	if [ "x$SKIP_PAYLOAD" == "xfalse" ]; then
-	        mkdir -p $CPWD/mnt/enc/live/payload
-	        mkdir -p $CPWD/mnt/enc/update/payload
-	        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/live/payload/
-	        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/update/payload/
-	        run touch $CPWD/mnt/boot/iot/.enc-formatted
-	        pg "Done"
-	else
-	        pg "Skipped"
-	fi
+        mkdir -p $CPWD/mnt/enc/live
+        mkdir -p $CPWD/mnt/enc/update
+        mkdir -p $CPWD/mnt/enc/telemetry
+        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/live/
+        run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/update/
+        run touch $CPWD/mnt/boot/iot/.enc-formatted
+        pg "Done"
 	
 	if [ "x$DEBUG_SHELL" == "xtrue" ]; then
 	

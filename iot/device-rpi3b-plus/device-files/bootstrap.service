@@ -1,15 +1,15 @@
 [Unit]
-Description="Crypto Key Commissioning"
+Description="Bootstrap process"
 After=boot-firmware.mount
-Before=home-eplayer-enc_drive.mount
+Before=home-iot-enc.mount
 
 [Service]
 Type=oneshot
 User=root
 WorkingDirectory=/bin/
 RemainAfterExit=yes
-ExecStart=/bin/crypt-commission-start
-ExecStop=/bin/crypt-commission-end
+ExecStart=/bin/bootstrap-start
+ExecStop=/bin/bootstrap-end
 StandardOutput=journal
 
 [Install]

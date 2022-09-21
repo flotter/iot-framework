@@ -1,14 +1,14 @@
 [Unit]
-Description="Eplayer Updater"
-After=cryptkey.service
-Wants=cryptkey.service
+Description="Settings and payload updater"
+After=bootstrap.service
+Wants=bootstrap.service
 
 [Service]
 Type=oneshot
 User=root
 WorkingDirectory=/bin/
 RemainAfterExit=yes
-ExecStart=/bin/online-update
+ExecStart=/bin/updater
 StandardOutput=journal
 
 [Install]

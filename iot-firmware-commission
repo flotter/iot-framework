@@ -24,8 +24,6 @@ ARGV=("$@")
 VERBOSE=false
 HELP=false
 DEBUG_SHELL=false
-SKIP_PAYLOAD=false
-
 
 # Clear args
 set --
@@ -50,8 +48,6 @@ while [ $COUNT -lt $ARGC ]; do
 		HELP=true
 	elif [ "x$STRIP" == "x-d" ]; then
 		DEBUG_SHELL=true
-	elif [ "x$STRIP" == "x-s" ]; then
-		SKIP_PAYLOAD=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -78,7 +74,6 @@ if [ "$HELP" == "true" ]; then
 	pn "-v (--verbose)      Verbose output for operations"
 	pn "-h (--help)         Print this"
 	pn "-d (--debug-shell)  Interactive shell"
-	pn "-s (--skip-payload) Payload will be updated when the unit is live"
 	pl
 	exitbuild
 fi

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+HW_STATE=
+
+while [ true ]; do
+
+	# This variable must point to a device node representing the
+	# peripheral device the payload depends on
+	HW=
+
+	TIM=$(date)
+
+	# Detect a change
+	if [ "x$HW" != "x$HW_STATE" ]; then
+		echo "Time: $TIM"
+		echo "Hardware: $HW"
+
+		# Apply the change
+		if [ "x$HW" == "x" ]; then
+			echo "Stopping payload due to peripheral device missing."
+			systemctl stop payload
+		else
+			echo "Starting player due to peripheral device now present"
+			sleep 5
+			systemctl start payload
+		fi
+	fi
+
+	HW_STATE=$HW
+
+	sleep 5
+done

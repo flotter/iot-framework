@@ -1,7 +1,7 @@
 #!/bin/bash
 
 KEYFILE=/run/keyfile
-BOOT_DIR=/boot/firmware/eplayer
+BOOT_DIR=/boot/firmware/iot
 CPWD=$(pwd)
 SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
 

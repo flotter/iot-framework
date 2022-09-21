@@ -2,54 +2,47 @@
 
 ENC_HDR=/dev/mmcblk0p3
 ENC_DRIVE=/dev/mmcblk0p4
-BOOT_DIR=/boot/firmware/eplayer
+
+BOOT_DIR=/boot/firmware/iot
 ENCRYPT_FLAG=$BOOT_DIR/.enc-encrypted
 FORMAT_FLAG=$BOOT_DIR/.enc-formatted
-COMMISSION_FLAG=$BOOT_DIR/.enc-commission
-KEYFILE=/run/keyfile
-ENC_NAME=enc_drive
-ENC_PATH=/home/eplayer/$ENC_NAME
 
-echo "Crypt-Commission: Key generation"
+KEYFILE=/run/keyfile
+ENC_NAME=enc
+ENC_PATH=/home/iot/$ENC_NAME
+ENC_PAYLOAD=/home/iot/payload
+
+# Generate a device specific secret key
 /bin/xkey
 
+# Make sure these directories exist
 /bin/mkdir -p $BOOT_DIR
 /bin/mkdir -p $ENC_PATH
 
-
+# Format the payload partition
 if [ ! -f $FORMAT_FLAG ]; then
 
-	echo "Crypt-Commission: First Time Format"
+	echo "No .enc-formatted : Formatting payload partition"
+
+	# Format to EXT4
 	/usr/sbin/mkfs.ext4 -F $ENC_DRIVE
 
-	#If we format, we need to redo encryption
+	# Make sure encryption is redone
 	rm -rf $ENCRYPT_FLAG
-	
-	/usr/bin/touch $FORMAT_FLAG
+
 fi
 
-
-# Only setup the encrypted drive once or of the flag is cleared
-# Data on the drive is lost when prepared
-
+# Encrypt the payload partition, but only the first time
 if [ ! -f $ENCRYPT_FLAG ]; then
 
-	echo "Crypt-Commission: Preparing Encryped Drive"
+	echo "No .enc-encrypted : Encrypting existing data in partition"
 	cat $KEYFILE | /usr/sbin/cryptsetup-reencrypt --new --header=$ENC_HDR --type=luks2 -c xchacha12,aes-adiantum-plain64 -s 256 -h sha512 --use-urandom $ENC_DRIVE
 	cat $KEYFILE | /usr/sbin/cryptsetup luksAddKey --header=$ENC_HDR $ENC_DRIVE $KEYFILE
-
-	echo "Crypt-Commission: Opening Drive"
-	/usr/sbin/cryptsetup luksOpen --header=$ENC_HDR $ENC_DRIVE $ENC_NAME --key-file=$KEYFILE
-
-	/usr/bin/touch $ENCRYPT_FLAG
-	# Force a "live partition" update
-	echo "-1" > $BOOT_DIR/settings/.version
-
-else
-	echo "Crypt-Commission: Opening Drive"
-	/usr/sbin/cryptsetup luksOpen --header=$ENC_HDR $ENC_DRIVE $ENC_NAME --key-file=$KEYFILE
-
 fi
+
+# Open the encrypted partition
+echo "Open encrypted drive"
+/usr/sbin/cryptsetup luksOpen --header=$ENC_HDR $ENC_DRIVE $ENC_NAME --key-file=$KEYFILE
 
 echo "Encrypted drive Check ..."
 if [ -e /dev/mapper/$ENC_NAME ]; then
@@ -61,10 +54,10 @@ else
 	reboot
 fi
 
-echo "Crypt-Commission: Disk Checking Repairing"
+echo "Running disk check"
 /usr/sbin/e2fsck -p /dev/mapper/$ENC_NAME
 
-echo "Crypt-Commission: Mounting"
+echo "Mounting"
 /usr/bin/mount /dev/mapper/$ENC_NAME $ENC_PATH
 RET=$?
 if [ $RET -ne 0 ]; then
@@ -73,6 +66,16 @@ if [ $RET -ne 0 ]; then
 	rm -f $FORMAT_FLAG 
 	reboot
 fi
+
+# If we got here, all is well
+/usr/bin/touch $FORMAT_FLAG
+/usr/bin/touch $ENCRYPT_FLAG
+
+# Setup payload directory structure
+mkdir -p $ENC_PATH/live
+mkdir -p $ENC_PATH/update
+mkdir -p $ENC_PATH/telemetry
+ln -snf $ENC_PATH/live $ENC_PAYLOAD
 
 # Encrypt the commissioning data under /boot/firmware
 if [ -d $BOOT_DIR/commission ]; then

@@ -140,7 +140,7 @@ source $IOT_DEVICE_DIR/$DEVICE/device-firmware
 device_firmware
 
 pl
-pnn "Device Firmware Built : "
-pg "$FIRMWARE_NAME_FINAL"
+pnn "Device Firmware Ready : "
+pg "$(basename $FIRMWARE_NAME_FINAL)"
 pl
 

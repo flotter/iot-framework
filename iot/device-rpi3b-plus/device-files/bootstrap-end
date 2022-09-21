@@ -1,0 +1,12 @@
+#!/bin/bash
+
+BOOT_DIR=/boot/firmware/iot
+ENC_NAME=enc
+ENC_PATH=/home/iot/$ENC_NAME
+
+echo "Unmount"
+/usr/bin/sync
+/usr/bin/umount $ENC_PATH
+
+echo "Closing Drive"
+/usr/sbin/cryptsetup luksClose $ENC_NAME
