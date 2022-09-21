@@ -1,4 +1,3 @@
-
 #!/bin/bash -e
 
 #----------------------------------------------------#
@@ -7,10 +6,192 @@
 
 DEVICE_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
+BUILD_IMAGE="ubuntu-22.04.1-preinstalled-server-arm64+raspi"
+BUILD_URL="https://cdimage.ubuntu.com/releases/22.04/release/$BUILD_IMAGE.img.xz"
+BUILD_MD5SUM="dc31ea25236f3b47b24ccdd46c1cf4ee"
+BUILD_SIZE=4096 # MiB
+
 #----------------------------------------------------#
 # COMMISSION                                         #
 #----------------------------------------------------#
 
 device_firmware() {
 
+	FIRMWARE_NAME_FINAL=$IOT_BUILD_DIR/$DEVICE/iot-firmware-$DEVICE-$VERSION-$DATE.img
+	FIRMWARE_NAME=$IOT_BUILD_DIR/$DEVICE/tmp.img
+	
+	pnn "- Downloading base image : "
+	mkdir -p $IOT_DOWNLOAD_DIR/$DEVICE
+	if [ -f $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz ]; then
+		MD5=$(md5sum $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz | sed -n 's/\(^[^ ]*\).*/\1/p')
+	fi
+	
+	if [ ! -f $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz ] || [ "x$MD5" != "x$BUILD_MD5SUM" ]; then
+		run wget -P $IOT_DOWNLOAD_DIR/$DEVICE $BUILD_URL
+		return_check "Image URL failed."
+	fi
+	pg "Done"
+	
+	pnn "- Image integrity check : "
+	if [ -f $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz ]; then
+		MD5=$(md5sum $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz | sed -n 's/\(^[^ ]*\).*/\1/p')
+		run echo "MD5SUM: $MD5 (vs $BUILD_MD5SUM)"
+	fi	
+	if [ "x$MD5" == "x$BUILD_MD5SUM" ] && [ "x$MD5" != "x" ]; then
+		pg "Pass"
+	else
+		err "Downloaded base image MD5 mismatch."
+	fi
+
+	pnn "- Cleaning up environment for build : "
+	rm -rf $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img
+	rm -rf $IOT_BUILD_DIR/$DEVICE
+	mkdir -p $IOT_BUILD_DIR/$DEVICE/
+	rm -rf $FIRMWARE_NAME
+	pg "Done"
+	
+	pnn "- Extracting image : "
+	run unxz -f -k $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz
+	mv $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img $FIRMWARE_NAME
+	
+	if [ -f $FIRMWARE_NAME ]; then
+		pg "Done"
+	else
+		err "Image extract failure."
+	fi
+	
+	pnn "- Restructuring image : "
+	run truncate -s ${BUILD_SIZE}M $FIRMWARE_NAME
+	return_check "Image file resizing failed."
+	
+	LOOPDEV=$(losetup --show -P -f $FIRMWARE_NAME)
+	{
+	    (
+	    echo d
+	    echo
+	    echo n
+	    echo p
+	    echo
+	    echo
+	    echo +3584M
+	    echo n
+	    echo p
+	    echo
+	    echo
+	    echo +32M
+	    echo n
+	    echo p
+	    echo
+	    echo +128M
+	    sleep 1
+	    echo w
+	    ) | fdisk $LOOPDEV
+	} > /dev/null 2>&1
+	
+	sync
+	partprobe ${LOOPDEV}
+
+	run e2fsck -f -p ${LOOPDEV}p2
+	return_check "Partition check failed."
+	
+	run resize2fs ${LOOPDEV}p2 
+	return_check "Partition Resize failed."
+
+	run mkfs.ext4 ${LOOPDEV}p4
+	sync
+	run losetup -d ${LOOPDEV}
+	
+	pg "Done"
+
+	pnn "- Mounting root filesystem : "
+	
+	LOOPDEV=$(losetup --show -P -f $CPWD/downloads/$BUILD_IMAGE.img)
+	mkdir -p $CPWD/mnt/boot
+	mkdir -p $CPWD/mnt/root
+	mount -o rw ${LOOPDEV}p2 $CPWD/mnt/root
+	mount -o rw ${LOOPDEV}p1 $CPWD/mnt/boot
+	
+	pg "Done"
+	
+	pnn "- Preparing for foreign chroot : "
+	
+	mount --bind /dev $CPWD/mnt/root/dev/
+	mount --bind /sys $CPWD/mnt/root/sys/
+	mount --bind /proc $CPWD/mnt/root/proc/
+	mount --bind /dev/pts $CPWD/mnt/root/dev/pts
+	mkdir -p $CPWD/mnt/root/boot/firmware
+	mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
+	mkdir -p $CPWD/mnt/root/home/rpi/native-prepare
+	mount --bind $CPWD/firmware/rpi/native-prepare $CPWD/mnt/root/home/rpi/native-prepare
+	
+	mv $CPWD/mnt/root/etc/resolv.conf $CPWD/mnt/root/etc/resolv.conf.backup
+	echo "nameserver 8.8.8.8" > $CPWD/mnt/root/etc/resolv.conf
+	cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
+	cp -f $CPWD/firmware/rpi/native-prepare.sh $CPWD/mnt/root/home/rpi
+	echo "$BUILD_VERSION" > $CPWD/mnt/root/home/rpi/.firmware_version
+	
+	echo "GEN_PRODUCTION=$PRODUCTION" >> $CPWD/mnt/root/home/rpi/native-input
+	echo "GEN_VERSION=$BUILD_VERSION" >> $CPWD/mnt/root/home/rpi/native-input
+	echo "GEN_DATE=$BUILD_DATE" >> $CPWD/mnt/root/home/rpi/native-input
+	echo "GEN_INTERACTIVE=$INTERACTIVE" >> $CPWD/mnt/root/home/rpi/native-input
+	echo "GEN_VERBOSE=$VERBOSE" >> $CPWD/mnt/root/home/rpi/native-input
+	
+	pg "DONE"
+	
+	if [ "x$INTERACTIVE" == "xtrue" ]; then
+		pl
+		py "[INPECTION POINT] Interactive terminal (type 'exit' to continue with native preparation) : "
+		pl
+		bash
+		pl
+	fi
+	
+	pn
+	pg "Foreign chroot start"
+	pn
+	
+	chroot $CPWD/mnt/root /home/rpi/native-prepare.sh 
+	
+	pn
+	pg "Foreign chroot end"
+	pn
+	
+	pnn "- Cleaning up chroot : "
+	
+	rm -f $CPWD/mnt/root/home/rpi/native-prepare.sh
+	rm -f $CPWD/mnt/root/home/rpi/native-input
+	rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
+	rm -f $CPWD/mnt/root/etc/resolv.conf
+	mv $CPWD/mnt/root/etc/resolv.conf.backup $CPWD/mnt/root/etc/resolv.conf
+	
+	sync
+	
+	umount $CPWD/mnt/root/home/rpi/native-prepare
+	rm -rf $CPWD/mnt/root/home/rpi/native-prepare
+	umount $CPWD/mnt/root/boot/firmware
+	umount $CPWD/mnt/root/dev/pts
+	umount $CPWD/mnt/root/dev/
+	umount $CPWD/mnt/root/sys/
+	umount $CPWD/mnt/root/proc/
+	
+	pg "DONE"
+	
+	
+	pnn "- Waiting for depedencies (5sec) : "
+	
+	sync
+	sleep 5
+	
+	pg "OK"
+	
+	pnn "- Unmounting root filesystem : "
+	
+	umount ${LOOPDEV}p1
+	umount ${LOOPDEV}p2
+	rm -d $CPWD/mnt/boot
+	rm -d $CPWD/mnt/root
+	rm -d $CPWD/mnt
+	run losetup -d ${LOOPDEV}
+	
+	pg "DONE"
 }

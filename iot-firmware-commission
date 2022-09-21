@@ -119,14 +119,12 @@ if [ -z "$DEVICE" ] || [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
 
 		select_device
 	else
-		pl
-		pr "No default device is set. Without Admin mode we cannot proceed."
-		pl
-		exit 1
+		err "No default device is set. Without Admin mode we cannot proceed."
 	fi
 else
 	# Default device (Non-admin mode compatible)
-	pn "Default device selected : $DEVICE"
+	pnn "- Device selected : "
+	pg "$DEVICE"
 fi
 
 pl
@@ -151,15 +149,7 @@ if [ ! -z "$FIRMWARE_REMOTE" ]; then
 	run mkdir -p $IOT_FW_DIR
         run rm -rf $IOT_FW_DIR/$FIRMWARE_REMOTE
         run tar xvzf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz -C $IOT_FW_DIR/
-	RET=$?
-	if [ $RET -ne 0 ]; then
-                pr "Fail"
-                pl
-                pr "Failed to decompress remote firmware (Ret: $RET)"
-                pl
-
-                exit 1
-        fi
+	return_check "Failed to decompress remote firmware."
 	pg "Done"
 
 	pnn "- Ready for commissioning : "
@@ -218,10 +208,7 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 
 		domain_iterate
 	else
-		pl
-		pr "No default domain is set. Without Admin mode we cannot proceed."
-		pl
-		exit 1
+		err "No default domain is set. Without Admin mode we cannot proceed."
 	fi
 else
 	# Single Default domain (Non-admin mode compatible)
@@ -249,10 +236,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	if [ -d $MASTER_DB/$DOMAIN_NEXT/settings ]; then
 		pg "Yes"
 	else
-		pr "No"
-		pl
-		pr "Error: Settings folder does not exist"
-		exit 1
+		err "Settings folder does not exist"
 	fi
 	
 	pnn "- Domain ($DOMAIN_NEXT) Netplan verification : "
@@ -304,22 +288,13 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
 		pg "Yes"
 	else
-		pr "No"
-		pl
-		pr "Error: Payload folder does not exist"
-		exit 1
+		err "Payload folder does not exist."
 	fi
 	
 	pnn "- Domain ($DOMAIN_NEXT) payload size check : "
 	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
 	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
-		pr "Fail"
-		pl
-		pr "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
-		
-		log "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
-		
-		exit 1
+		err "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
 	fi
 	pg "Done"
 
@@ -358,12 +333,7 @@ pg ":: Commissioning Image ::"
 pl
 
 if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-commission ]; then
-	pl
-	pr "Error: Cannot locate commission script for device: $DEVICE"
-	pl
-
-	log "Error: Cannot locate commission script for device: $DEVICE"
-	exit 1
+	err "Cannot locate commission script for device: $DEVICE"
 fi
 
 source $IOT_DEVICE_DIR/$DEVICE/device-commission
@@ -374,7 +344,7 @@ rm -rf $FIRMWARE_NAME_FINAL
 mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
 
 pl
-pnn "Device Firmware Ready : "
+pnn "Device firmware commissioned and ready for flashing : "
 pg "$FIRMWARE_NAME_FINAL"
 pl
 

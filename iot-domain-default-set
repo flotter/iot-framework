@@ -119,9 +119,7 @@ pnn "Type 'ok' and Enter to continue : "
 read SELECT
 
 if [ "x$SELECT" != "xok" ]; then
-	pl
-	pr "Add aborted"
-	exit 1
+	err "User aborted."
 fi
 
 log "Default domain set to Customer ID: $CUST, Site ID: $SITE"

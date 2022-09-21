@@ -134,10 +134,7 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 
 		domain_iterate
 	else
-		pl
-		pr "No default domain is set. Without Admin mode we cannot proceed."
-		pl
-		exit 1
+		err "No default domain is set. Without Admin mode we cannot proceed."
 	fi
 else
 	# Single Default domain (Non-admin mode compatible)
@@ -166,10 +163,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	if [ -d $MASTER_DB/$DOMAIN_NEXT/settings ]; then
 		pg "Yes"
 	else
-		pr "No"
-		pl
-		pr "Error: Settings folder does not exist"
-		exit 1
+		err "Settings folder does not exist"
 	fi
 	
 	pnn "- Domain ($DOMAIN_NEXT) Netplan verification : "

@@ -105,16 +105,10 @@ pn "The following Customer ID and Site ID is the default domain:"
 
 DOMAIN=$(domain)
 if [ -z "$DOMAIN" ]; then
-	pl
-	pr "Error: No default domain is set. Please set it first"
-	pl
-	exit 1
+	err "No default domain is set. Please set it first."
 fi
 if [ ! -d $MASTER_DB/$DOMAIN ]; then
-	pl
-	pr "Error: Domain does not exist. Please create it first."
-	pl
-	exit 1
+	err "Domain does not exist. Please create it first."
 fi
 
 CUST=$(dirname $DOMAIN)

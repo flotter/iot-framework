@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-device-default-set.log
+LOG=$MASTER_DB/iot-firmware-build.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -23,6 +23,9 @@ ARGV=("$@")
 
 VERBOSE=false
 HELP=false
+DEBUG_SHELL=false
+PRODUCTION=false
+
 
 # Clear args
 set --
@@ -45,6 +48,10 @@ while [ $COUNT -lt $ARGC ]; do
 		VERBOSE=true
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
+	elif [ "x$STRIP" == "x-d" ]; then
+		DEBUG_SHELL=true
+	elif [ "x$STRIP" == "x-p" ]; then
+		PRODUCTION=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -57,22 +64,23 @@ done
 log "Started"
 
 pl
-pg "iot-device-default-set ($VERSION)"
+pg "iot-firmware-build ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
-        pl
 	pn "Usage:"
 	pl
-        pn "Set the default device used while preparing firmware."
-        pl
-	pn "iot-device-default-set [-v] [-h] ..."
+	pn "Build a device specific firmware image."
+	pl
+	pn "iot-firmware-build [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
-	pn "-v (--verbose)     Verbose output for operations"
-	pn "-h (--help)        Print this"
+	pn "-v (--verbose)      Verbose output for operations"
+	pn "-h (--help)         Print this"
+	pn "-d (--debug-shell)  Interactive shell"
+	pn "-p (--production)   Exclude various debug features from the image"
 	pl
-	exit 1
+	exitbuild
 fi
 
 #----------------------------------------------------#
@@ -87,48 +95,52 @@ common_setup
 
 log "Common Setup OK"
 
+pnn "- Admin mode enabled : "
+ADMIN=$(admin)
+if [ "x$ADMIN" == "x1" ]; then
+	pg "Yes"
+else
+	pg "No"
+fi
+
 #----------------------------------------------------#
 # BODY                                               #
 #----------------------------------------------------#
 
 pl
-pg ":: Set Default Device ::"
+pg ":: Device Selection ::"
 pl
 
-pn "A device is a collection of board specific attributes."
-pn "To verify and use various firmware attributes, we need"
-pn "know some board specific details. This option sets the"
-pn "device so subsequent operations know which board to use."
-pl
+DEVICE=$(device)
 
-select_device
+if [ -z "$DEVICE" ] || [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
 
-pl
-pg ":: Final Confirmation ::"
-pl
+	if [ "x$ADMIN" == "x1" ]; then
 
-pn "Set the following device as the default:"
-
-pl
-pnn "Device : "
-pg $DEVICE
-pl
-pnn "Type 'ok' and Enter to continue : "
-read SELECT
-
-if [ "x$SELECT" != "xok" ]; then
-	err "User aborted."
+		select_device
+	else
+		err "No default device is set. Without Admin mode we cannot proceed."
+	fi
+else
+	# Default device (Non-admin mode compatible)
+	pnn "- Device selected : "
+	pg "$DEVICE"
 fi
 
 pl
-pg ":: Performing Actions ::"
+pg ":: Building Image ::"
 pl
 
-pnn "- Setting default device : "
-sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
-echo "IOT_DEVICE=$DEVICE" >> $TOOL_SETTINGS
-pg "Done"
+if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-firmware ]; then
+	err "Error: Cannot locate firmware script for device: $DEVICE"
+fi
 
-log "Default device set to $DEVICE"
+source $IOT_DEVICE_DIR/$DEVICE/device-firmware
+
+device_firmware
 
 pl
+pnn "Device Firmware Built : "
+pg "$FIRMWARE_NAME_FINAL"
+pl
+

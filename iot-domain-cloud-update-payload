@@ -134,10 +134,7 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 
 		domain_iterate
 	else
-		pl
-		pr "No default domain is set. Without Admin mode we cannot proceed."
-		pl
-		exit 1
+		err "No default domain is set. Without Admin mode we cannot proceed."
 	fi
 else
 	# Single Default domain (Non-admin mode compatible)
@@ -166,22 +163,13 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
 		pg "Yes"
 	else
-		pr "No"
-		pl
-		pr "Error: Payload folder does not exist"
-		exit 1
+		err "Payload folder does not exist"
 	fi
 	
 	pnn "- Domain ($DOMAIN_NEXT) payload size check : "
 	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
 	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
-		pr "Fail"
-		pl
-		pr "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
-		
-		log "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
-		
-		exit 1
+		err "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
 	fi
 	pg "Done"
 

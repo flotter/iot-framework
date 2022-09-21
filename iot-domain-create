@@ -106,9 +106,7 @@ pnn "Type 'ok' and Enter to continue : "
 read SELECT
 
 if [ "x$SELECT" != "xok" ]; then
-	pl
-	pr "Add aborted"
-	exit 1
+	err "User aborted."
 fi
 
 log "Confirmation granted"
@@ -136,17 +134,11 @@ if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 	CUST=cust-$CUST
 
 	if [ "x$CUST" == "xcust-" ]; then
-		pl
-		pr "Empty Customer ID suffix is not allowed"
-		pl
-		exit 1
+		err "Empty Customer ID suffix is not allowed"
 	fi
 
 	if [ -d $MASTER_DB/$CUST ]; then
-		pl
-		pr "Customer ID cannot be created, it already exists ($CUST)"
-		pl
-		exit 1
+		err "Customer ID cannot be created, it already exists ($CUST)"
 	fi
 else
 	log "Selecting Customer ID"   
@@ -186,10 +178,7 @@ else
 fi
 		
 if [ -z "$CUST" ]; then
-	pl
-	pr "Error: No valid Customer ID found! Please create a new Customer ID"
-	pl
-	exit 1
+	err "No valid Customer ID found! Please create a new Customer ID"
 fi 
 
 pl
@@ -211,17 +200,11 @@ if [ "x$SELECT" == "xY" ] || [ "x$SELECT" == "xy" ]; then
 	SITE=site-$SITE
 
 	if [ "x$SITE" == "xsite-" ]; then
-		pl
-		pr "Empty Site ID suffix is not allowed"
-		pl
-		exit 1
+		err "Empty Site ID suffix is not allowed"
 	fi
 
 	if [ -d $MASTER_DB/$CUST/$SITE ]; then
-		pl
-		pr "Site ID cannot be created, it already exists ($SITE)"
-		pl
-		exit 1
+		err "Site ID cannot be created, it already exists ($SITE)"
 	fi
 else
 	log "Selecting Site ID"   
@@ -260,10 +243,7 @@ else
 fi
 
 if [ -z "$SITE" ]; then
-	pl
-	pr "Error: No valid Site ID found! Please create a new Site ID"
-	pl
-	exit 1
+	err "No valid Site ID found! Please create a new Site ID"
 fi 
 
 pl
@@ -290,9 +270,7 @@ pnn "Type 'ok' and Enter to continue : "
 read SELECT
 
 if [ "x$SELECT" != "xok" ]; then
-	pl
-	pr "Add aborted"
-	exit 1
+	err "User aborted."
 fi
 
 log "Adding or Resetting Customer ID: $CUST, Site ID: $SITE"

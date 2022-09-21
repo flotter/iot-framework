@@ -35,36 +35,45 @@ P_RESET="\e[0m"
 P_RED="\e[31m"
 P_GREEN="\e[32m"
 
-function pl() {
+pl() {
 	echo -e "$P_RESET"
 }
 
-function pn() {
+pn() {
 	echo -e "$P_RESET$@"
 }
 
-function pr() {
+pr() {
 	echo -e "$P_RED$@$P_RESET"
 }
 
-function pg() {
+pg() {
 	echo -e "$P_GREEN$@$P_RESET"
 }
 
-function pnn() {
+pnn() {
 	echo -ne "$P_RESET$@"
 }
 
-function prn() {
+prn() {
 	echo -ne "$P_RED$@$P_RESET"
 }
 
-function pgn() {
+pgn() {
 	echo -ne "$P_GREEN$@$P_RESET"
 }
 
-function log() {
+log() {
 	echo "[$(date) - $VERSION] $@" >> $LOG
+}
+
+err() {
+	pl
+	pl
+	pr "Error: $1"
+	pl
+	log "Error: $1"
+	exit 1
 }
 
 #----------------------------------------------------#
@@ -75,10 +84,27 @@ run() {
         if $VERBOSE; then
                 v=$(exec 2>&1 && set -x && set -- "$@")
                 echo "#${v#*--}"
+		set +e
                 "$@"
+		RET=$?
+		set -e
         else
+		set +e
                 "$@" >/dev/null 2>&1
+		RET=$?
+		set -e
         fi
+}
+
+return_check() {
+	if [ $RET -ne 0 ]; then
+		pl
+                pl
+                pr "Error: $1"
+                pl 
+                log "Error: $1"
+                exit 1
+	fi
 }
 
 #----------------------------------------------------#
@@ -93,10 +119,9 @@ common_setup() {
 	pnn "- Running with Sudo : "
 	ID=$(id -u)
 	if [ "x$ID" == "x0" ]; then
-	    pg "Yes"
+		pg "Yes"
 	else
-	    pr "No"
-	    exit 1
+		err "Please run with sudo."
 	fi
 
         pnn "- Apply environment override settings : "
@@ -104,20 +129,14 @@ common_setup() {
         touch $TOOL_SETTINGS
         if [ -v IOT_DOMAIN ]; then
                 if [ ! -d $MASTER_DB/$IOT_DOMAIN ]; then
-			pr "Fail"
-			pl
-			pr "Domain does not exist. Please create it first."
-			exit 1
+			err "Domain does not exist. Please create it first."
 		fi
         	sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
                 echo "IOT_DOMAIN=$IOT_DOMAIN" >> $TOOL_SETTINGS
 	fi
         if [ -v IOT_DEVICE ]; then
                 if [ ! -d $IOT_DEVICE_DIR/$IOT_DEVICE ]; then
-			pr "Fail"
-			pl
-			pr "Support for device $IOT_DEVICE does not exist. Did you spell it correctly?"
-			exit 1
+			err "Support for device $IOT_DEVICE does not exist. Did you spell it correctly?"
 		fi
         	sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
                 echo "IOT_DEVICE=$IOT_DEVICE" >> $TOOL_SETTINGS
@@ -152,26 +171,17 @@ common_setup() {
 which git > /dev/null 2>&1
 GIT_RET=$?
 if [ $GIT_RET -ne 0 ]; then
-	pn
-	pr "Cannot find git tool"
-	pn
-	exit 1
+	err "Cannot find git tool"
 fi
 GITHASH=$(cd $REPO_ROOT && git rev-parse --short HEAD)
 GIT_RET=$?
 if [ $GIT_RET -ne 0 ]; then
-	pn
-	pr "Cannot find IOT git repo hash"
-	pn
-	exit 1
+	err "Cannot find IOT git repo hash"
 fi
 GITTAG=$(cd $REPO_ROOT && git describe --tags --abbrev=0)
 GIT_RET=$?
 if [ $GIT_RET -ne 0 ]; then
-	pn
-	pr "Cannot find IOT git repo hash"
-	pn
-	exit 1
+	err "Cannot find IOT git repo hash"
 fi
 
 VERSION="$GITTAG-$GITHASH"
@@ -191,12 +201,7 @@ update_settings_check() {
 	SETTINGS_UPDATE_RET=$?
 
 	if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
-		pr "Fail"
-	        pl 
-	        pr "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
-
-		log "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
-	        exit 1 
+		err "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
 	fi
 
 	S1=$(echo $SETTINGS_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
@@ -214,12 +219,7 @@ update_settings_check() {
 		SETTINGS_UPDATE_RET=$?
 
 		if [ $SETTINGS_UPDATE_RET -ne 0 ]; then
-			pr "Fail"
-		        pl 
-		        pr "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
-	
-			log "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
-		        exit 1 
+			err "Settings update for domain $CUST/$SITE failed (Ret: $SETTINGS_UPDATE_RET)"
 	        fi
 
 		SETTINGS_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
@@ -233,12 +233,7 @@ update_payload_check() {
 	PAYLOAD_UPDATE_RET=$?
 
 	if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
-		pr "Fail"
-	        pl 
-	        pr "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
-
-		log "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
-	        exit 1 
+		err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
 	fi
 
 	P1=$(echo $PAYLOAD_UPDATE | grep 'Summary:' | sed -n 's/.*Summary: \([^ ]*\).*/\1/p')
@@ -256,12 +251,7 @@ update_payload_check() {
 		PAYLOAD_UPDATE_RET=$?
 
 		if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
-			pr "Fail"
-		        pl 
-		        pr "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
-	
-			log "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
-		        exit 1 
+			err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
 	        fi
 
 		PAYLOAD_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
@@ -282,8 +272,7 @@ admin() {
 
 admin_check() {
 	if [ "x$(admin)" != "x1" ]; then
-		pr "No"
-		exit 1
+		err "Admin mode is required."
 	fi
 }
 
@@ -295,18 +284,10 @@ domain() {
 
 domain_check() {
 	if [ -z "$(domain)" ]; then
-		pr "Fail"
-	        pl
-	        pr "Error: No default domain is set. Please set it first"
-	        pl
-	        exit 1
+		err "No default domain is set. Please set it first"
 	fi
 	if [ ! -d "$MASTER_DB/$(domain)" ]; then
-		pr "Fail"
-	        pl
-	        pr "Error: Domain does not exist. Please check the spelling."
-	        pl
-	        exit 1
+		err "Domain does not exist. Please check the spelling."
 	fi
 }
 
@@ -318,18 +299,10 @@ device() {
 
 device_check() {
 	if [ -z "$(device)" ]; then
-		pr "Fail"
-	        pl
-	        pr "Error: No default device is set. Please set it first"
-	        pl
-	        exit 1
+		err "No default device is set. Please set it first." 
 	fi
 	if [ ! -d "$IOT_DEVICE_DIR/$(device)" ]; then
-		pr "Fail"
-	        pl
-	        pr "Error: Device does not exist. Please check the spelling."
-	        pl
-	        exit 1
+		err "Device does not exist. Please check the spelling."
 	fi
 }
 
@@ -341,12 +314,7 @@ netplan_verify() {
 	rm -rf $NPVER
 
 	if [ $RET -ne 0 ]; then
-	        pr "Fail"
-	        pl
-	        pr "Wifi settings invalid ($1/$2/settings/.wifi)"
-	        log "Wifi settings invalid ($1/$2/settings/.wifi)"
-	
-	        exit 1
+		err "Wifi settings invalid ($1/$2/settings/.wifi)"
 	fi
 }
 
@@ -393,10 +361,7 @@ select_domain_cust() {
 	CUST=${CUST_LIST[$SELECT]}
 	
 	if [ -z "$CUST" ]; then
-	        pl
-	        pr "Error: No valid Customer ID found! Please create a new Customer ID"
-	        pl
-	        exit 1
+		err "No valid Customer ID found! Please create a new Customer ID."
 	fi
 
 	if [ "$CUST" = "$EXTRA" ]; then
@@ -448,10 +413,7 @@ select_domain_site() {
 	SITE=${SITE_LIST[$SELECT]}
 	
 	if [ -z "$SITE" ]; then
-	        pl
-	        pr "Error: No valid Site ID found! Please create a new Site ID"
-	        pl
-	        exit 1
+		err "No valid Site ID found! Please create a new Site ID"
 	fi
 	
 	if [ "$SITE" = "$EXTRA" ]; then
@@ -541,10 +503,7 @@ select_device() {
 	DEVICE=${DEVICE_LIST[$SELECT]}
 	
 	if [ -z "$DEVICE" ]; then
-	        pl
-	        pr "Error: No valid device found! Internal error."
-	        pl
-	        exit 1
+		err "No valid device found! Internal error."
 	fi
 }
 
@@ -594,10 +553,7 @@ select_remote_fw() {
 	FIRMWARE_REMOTE=${FIRMWARES_REMOTE[$SELECT]}
 	
 	if [ -z "$FIRMWARE_REMOTE" ]; then
-	        pl
-	        pr "Error: No valid remote firmware found for device: $DEVICE."
-	        pl
-	        exit 1
+		err "No valid remote firmware found for device: $DEVICE."
 	fi
 	
 	if [ "$FIRMWARE_REMOTE" = "$EXTRA" ]; then
@@ -612,15 +568,7 @@ download_remote_fw_check() {
 	FW=$1
 	TARGET_DIR=$2
         run s3cmd --config $S3_ALL get $FW $TARGET_DIR
-        RET=$?
-        if [ $RET -ne 0 ]; then
-		pr "Fail"
-                pl
-                pr "Remote firmware download failed (Ret: $RET)"
-		pl
-
-                exit 1
-        fi
+	return_check "Remote firmware download failed."
 }
 
 select_local_fw() {
@@ -662,9 +610,6 @@ select_local_fw() {
 	FIRMWARE_LOCAL=${FIRMWARES_LOCAL[$SELECT]}
 	
 	if [ -z "$FIRMWARE_LOCAL" ]; then
-	        pl
-	        pr "Error: No valid locally built firmware found for device: $DEVICE"
-	        pl
-	        exit 1
+		err "No valid locally built firmware found for device: $DEVICE"
 	fi
 }

@@ -105,16 +105,10 @@ pn "The selected default device:"
 
 DEVICE=$(device)
 if [ -z "$DEVICE" ]; then
-	pl
-	pr "Error: No default device is set. Please set it first"
-	pl
-	exit 1
+	err "No default device is set. Please set it first."
 fi
 if [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
-	pl
-	pr "Error: Device does not exist. Please check the spelling."
-	pl
-	exit 1
+	err "Device does not exist. Please check the spelling."
 fi
 
 pl
