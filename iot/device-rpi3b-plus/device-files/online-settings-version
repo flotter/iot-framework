@@ -8,10 +8,10 @@ if [ $RET -eq 0 ]; then
 	ONLINE=1
 fi
 	
-cat /run/settings/version.cfg > /run/.settings-version 
+cat /run/settings/version.cfg > /run/settings-version.cfg 
 
 if [ $ONLINE -eq 1 ] && [ -f /run/commission/s3cfg-download.cfg ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
-	s3cmd -q -f --config /run/commission/s3cfg-download.cfg get --no-preserve s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/settings/version.cfg /run/.settings-version
+	s3cmd -q -f --config /run/commission/s3cfg-download.cfg get --no-preserve s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/settings/version.cfg /run/settings-version.cfg
 fi
 
-cat /run/.settings-version
+cat /run/settings-version.cfg

@@ -1,16 +1,16 @@
 [Unit]
-Description="EPlayer"
+Description="Payload Service"
 StartLimitAction=reboot-force
 StartLimitIntervalSec=60
 StartLimitBurst=5
-After=ep-update.service
-Wants=ep-update.service
+After=updater.service
+Wants=updater.service
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/eplayer/music-player
-ExecStart=/usr/bin/python3 /home/eplayer/music-player/eplayer.py
+WorkingDirectory=/home/iot/payload
+ExecStart=/home/iot/payload/payload-start
 Restart=always
 RestartSec=5
 StandardOutput=journal
