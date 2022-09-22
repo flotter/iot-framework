@@ -148,6 +148,7 @@ if [ ! -z "$FIRMWARE_REMOTE" ]; then
 	pg "Done"
 
 	pnn "- Ready for commissioning : "
+	run mkdir -p $IOT_FW_DIR
 	run rm -rf $IOT_FW_DIR/tmp.img
 	mv $IOT_FW_DIR/$FIRMWARE_REMOTE $IOT_FW_DIR/tmp.img
 	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_REMOTE
@@ -161,6 +162,7 @@ else
 	pg "$IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL"
 	
 	pnn "- Ready for commissioning : "
+	run mkdir -p $IOT_FW_DIR
 	run rm -rf $IOT_FW_DIR/tmp.img
 	cp $IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL $IOT_FW_DIR/tmp.img
 	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_LOCAL
@@ -335,6 +337,7 @@ source $IOT_DEVICE_DIR/$DEVICE/device-commission
 
 device_commission
 
+mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
 rm -rf $FIRMWARE_NAME_FINAL
 mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
 

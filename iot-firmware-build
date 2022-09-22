@@ -139,6 +139,10 @@ source $IOT_DEVICE_DIR/$DEVICE/device-firmware
 
 device_firmware
 
+# Complete, move to real name
+mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
+mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+
 pl
 pnn "Device Firmware Ready : "
 pg "$(basename $FIRMWARE_NAME_FINAL)"
