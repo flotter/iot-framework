@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-create-or-update.log
+LOG=$LOGS_DIR/iot-domain-create-or-update.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -283,14 +283,14 @@ mkdir -p $MASTER_DB/$CUST/$SITE/settings
 pg "Done"
 
 pnn "- Copying latest settings : "
-run cp -Rf $REPO_ROOT/settings/* -C $MASTER_DB/$CUST/$SITE/settings
+run cp -Rf $REPO_ROOT/settings/* $MASTER_DB/$CUST/$SITE/settings
 if [ ! -f $MASTER_DB/$CUST/$SITE/settings/version.cfg ]; then
 	echo "0" > $MASTER_DB/$CUST/$SITE/settings/version.cfg
 fi
 pg "Done"
 
 pnn "- Copying latest payload : "
-run cp -Rf $REPO_ROOT/payload/* -C $MASTER_DB/$CUST/$SITE/payload
+run cp -Rf $REPO_ROOT/payload/* $MASTER_DB/$CUST/$SITE/payload
 if [ ! -f $MASTER_DB/$CUST/$SITE/payload/version.cfg ]; then
 	echo "0" > $MASTER_DB/$CUST/$SITE/payload/version.cfg
 fi

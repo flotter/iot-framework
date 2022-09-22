@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-domain-cloud-update-settings.log
+LOG=$LOGS_DIR/iot-domain-cloud-update-settings.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #

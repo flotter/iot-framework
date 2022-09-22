@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Red LED
+/bin/led-control led1 off
+
+echo "Payload stopped."
+

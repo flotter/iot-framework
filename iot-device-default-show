@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$MASTER_DB/iot-device-default-show.log
+LOG=$LOGS_DIR/iot-device-default-show.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #

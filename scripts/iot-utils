@@ -21,6 +21,7 @@ FIRMWARE_PAYLOAD_MAX_SIZE=32
 
 REPO_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && cd .. && pwd )
 MASTER_DB=$REPO_ROOT/database
+LOGS_DIR=$REPO_ROOT/logs
 TOOL_SETTINGS=/home/$USER/.iot-tools/settings
 IOT_DEVICE_DIR=$REPO_ROOT/iot
 IOT_FW_DIR=$REPO_ROOT/firmware
@@ -64,6 +65,7 @@ pgn() {
 }
 
 log() {
+	mkdir -p $LOGS_DIR
 	echo "[$(date) - $VERSION] $@" >> $LOG
 }
 
