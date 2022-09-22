@@ -256,7 +256,7 @@ else
 
 		update_settings
 		
-		update_log_publish "Payload update processed."
+		update_log_publish "Settings update processed."
 
 	else
 		echo "Commissioning and Settings files not found for required S3 update"
