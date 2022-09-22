@@ -50,6 +50,7 @@ fi
 
 # The last reboot is now, we just started this script
 LAST_REBOOT_UTC=$(date +%s)
+echo "$(date --utc)" > $LAST_REBOOT_UTC_FILE
 
 # We will send a heartbeat on startup, so also now
 LAST_HEARTBEAT_UTC=$LAST_REBOOT_UTC

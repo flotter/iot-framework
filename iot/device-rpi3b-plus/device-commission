@@ -51,7 +51,6 @@ device_commission() {
 	
         mkdir -p $CPWD/mnt/enc/live
         mkdir -p $CPWD/mnt/enc/update
-        mkdir -p $CPWD/mnt/enc/telemetry
         run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/live/
         run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/update/
         run touch $CPWD/mnt/boot/iot/payload-formatted.flag

@@ -15,7 +15,7 @@ HEALTH_LOGGER_LAST=$(date +%s)
 UPDATE_LOOP_RATE=300
 
 # Check if the logger is disabled
-if [ $HEALTH_LOGGER_RATE -ne 0 ]; then
+if [ $HEALTH_LOGGER_RATE -eq 0 ]; then
 	echo "Health logger disabled ..."
 else
 	echo "Health logger rate is: $HEALTH_LOGGER_RATE"
