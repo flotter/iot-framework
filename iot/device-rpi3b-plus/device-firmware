@@ -6,9 +6,9 @@
 
 DEVICE_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-BUILD_IMAGE="ubuntu-22.04.1-preinstalled-server-arm64+raspi"
-BUILD_URL="https://cdimage.ubuntu.com/releases/22.04/release/$BUILD_IMAGE.img.xz"
-BUILD_MD5SUM="dc31ea25236f3b47b24ccdd46c1cf4ee"
+BUILD_IMAGE="ubuntu-20.04.5-preinstalled-server-arm64+raspi.img.xz"
+BUILD_URL="https://cdimage.ubuntu.com/releases/20.04/release/$BUILD_IMAGE.img.xz"
+BUILD_MD5SUM="4d079a25c9571b0e9eb52224f5884285"
 BUILD_SIZE=4096 # MiB
 
 FIRMWARE_USER=iot

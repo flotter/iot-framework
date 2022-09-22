@@ -98,7 +98,7 @@ while [ true ]; do
 	if [ "x$UPDATE_WINDOW_ACTIVE" == "x1" ] || [ "x$LIVE_CHECK" == "xyes" ]; then
 
 
-		# Green LED
+		# Green LED Update Check
 		/bin/led-control led0 flash 10
 
 		# Settings
@@ -144,64 +144,68 @@ while [ true ]; do
 	wget -q --spider http://google.com
 	RET=$?
 	if [ $RET -eq 0 ]; then
-		# GREEN LED FLASH 1HZ
+		# Green LED Online
 		/bin/led-control led0 flash 1
 	else
-		# GREEN LED OFF
+		# Green LED Offline
 		/bin/led-control led0 off
 	fi
 
-	# Heartbeat is mostly a debug feature, but it provides live device health
-	# information without needing a reboot to publish logs.
-	BEAT_DELTA=$((TIME_NOW_UTC - LAST_HEARTBEAT_UTC))
-	if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
+	# Is heartbeat disabled?
+	if [ $HEARTBEAT_RATE -ne 0 ]; then
 
-		# Delay after reboot so we capture actual state
-		if [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
-			echo "Sleeping 60 seconds after reboot before updating heartbeat..."
-			sleep 60
-		fi
-		
-		LAST_HEARTBEAT_UTC=$(date +%s)
-
-		echo "Updating heartbeat ..."
-
-		ONLINE=0		
-		wget -q --spider http://google.com
-		RET=$?
-		if [ $RET -eq 0 ]; then
-			ONLINE=1
-		fi
-		
-		if [ $ONLINE -eq 1 ] && [ -f /run/commission/s3cfg-upload.cfg ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
-
-			# Clear heartbeat file
-			cat /dev/null > /run/heartbeat.cfg
-
-			echo "timestamp=$(date --utc)" >> /run/heartbeat.cfg
-			echo "settings-online-version=$(/bin/online-settings-version)" >> /run/heartbeat.cfg
-			echo "settings-offline-version=$(/bin/offline-settings-version)" >> /run/heartbeat.cfg
-			echo "payload-online-version=$(/bin/online-payload-version)" >> /run/heartbeat.cfg
-			echo "payload-offline-version=$(/bin/offline-payload-version)" >> /run/heartbeat.cfg
-			echo "power-state=$(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/heartbeat.cfg
-			echo "last-reboot=$(cat $LAST_REBOOT_UTC_FILE)" >> /run/heartbeat.cfg
-			echo "reboots=$(cat $REBOOT_COUNT_FILE)" >> /run/heartbeat.cfg
-			echo "firmware-version=$(cat $FW_VER)" >> /run/heartbeat.cfg
-			echo "firmware-production=$(cat $FW_PROD)" >> /run/heartbeat.cfg
-			echo "firmware-date==$(cat $FW_DATE)" >> /run/heartbeat.cfg			
-
-			# Upload the heartbeat
-			s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/heartbeat.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-info.txt
-
-			journalctl -u payload -a -n 50 > /run/payload.cfg
-
-			# Upload a payload log snippet			
-			s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/payload.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-payload.txt
+		# Heartbeat is mostly a debug feature, but it provides live device health
+		# information without needing a reboot to publish logs.
+		BEAT_DELTA=$((TIME_NOW_UTC - LAST_HEARTBEAT_UTC))
+		if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
+	
+			# Delay after reboot so we capture actual state
+			if [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
+				echo "Sleeping 60 seconds after reboot before updating heartbeat..."
+				sleep 60
+			fi
+			
+			LAST_HEARTBEAT_UTC=$(date +%s)
+	
+			echo "Updating heartbeat ..."
+	
+			ONLINE=0		
+			wget -q --spider http://google.com
+			RET=$?
+			if [ $RET -eq 0 ]; then
+				ONLINE=1
+			fi
+			
+			if [ $ONLINE -eq 1 ] && [ -f /run/commission/s3cfg-upload.cfg ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
+	
+				# Clear heartbeat file
+				cat /dev/null > /run/heartbeat.cfg
+	
+				echo "timestamp=$(date --utc)" >> /run/heartbeat.cfg
+				echo "settings-online-version=$(/bin/online-settings-version)" >> /run/heartbeat.cfg
+				echo "settings-offline-version=$(/bin/offline-settings-version)" >> /run/heartbeat.cfg
+				echo "payload-online-version=$(/bin/online-payload-version)" >> /run/heartbeat.cfg
+				echo "payload-offline-version=$(/bin/offline-payload-version)" >> /run/heartbeat.cfg
+				echo "power-state=$(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/heartbeat.cfg
+				echo "last-reboot=$(cat $LAST_REBOOT_UTC_FILE)" >> /run/heartbeat.cfg
+				echo "reboots=$(cat $REBOOT_COUNT_FILE)" >> /run/heartbeat.cfg
+				echo "firmware-version=$(cat $FW_VER)" >> /run/heartbeat.cfg
+				echo "firmware-production=$(cat $FW_PROD)" >> /run/heartbeat.cfg
+				echo "firmware-date==$(cat $FW_DATE)" >> /run/heartbeat.cfg			
+	
+				# Upload the heartbeat
+				s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/heartbeat.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-info.txt
+	
+				journalctl -u payload -a -n 50 > /run/payload.cfg
+	
+				# Upload a payload log snippet			
+				s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/payload.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-payload.txt
+			else
+				echo "Not ready to update heartbeat internet is offline"
+			fi		
 		else
-			echo "Not ready to update heartbeat internet is offline"
-		fi		
-	else
-		echo "Not ready to update heartbeat (Delta: $BEAT_DELTA, Rate: $HEARTBEAT_RATE)"
+			echo "Not ready to update heartbeat (Delta: $BEAT_DELTA, Rate: $HEARTBEAT_RATE)"
+		fi
 	fi
 
 	# Cleanup

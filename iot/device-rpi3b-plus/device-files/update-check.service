@@ -1,7 +1,7 @@
 [Unit]
 Description="Update Checker"
-After=ep-update.service
-Wants=ep-update.service
+After=updater.service
+Wants=updater.service
 
 [Service]
 Type=simple

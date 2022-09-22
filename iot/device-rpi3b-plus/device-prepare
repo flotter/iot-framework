@@ -170,20 +170,26 @@ run cp $CPWD/device-files/xkey /bin
 py "Done"
 
 pnn "- Installing encrypted drive service : "
-run cp $CPWD/device-files/player-hw-test /bin/
-run cp $CPWD/device-files/crypt-commission-start /bin/
-run cp $CPWD/device-files/crypt-commission-end /bin/
-run cp $CPWD/device-files/check-update /bin/
+run cp $CPWD/device-files/bootstrap-start /bin/
+run cp $CPWD/device-files/bootstrap-end /bin/
+run cp $CPWD/device-files/health-logger /bin/
 run cp $CPWD/device-files/led-control /bin/
-run cp $CPWD/device-files/online-update /bin/
-run cp $CPWD/device-files/online-version /bin/
-run cp $CPWD/device-files/offline-version /bin/
+run cp $CPWD/device-files/offline-payload-version /bin/
+run cp $CPWD/device-files/offline-settings-version /bin/
+run cp $CPWD/device-files/online-payload-version /bin/
+run cp $CPWD/device-files/online-settings-version /bin/
+run cp $CPWD/device-files/payload-hw-check /bin/
+run cp $CPWD/device-files/update-check /bin/
+run cp $CPWD/device-files/updater /bin/
+
 run cp $CPWD/device-files/*.service /etc/systemd/system
-run systemctl enable cryptkey
+
+run systemctl enable bootstrap
 run systemctl enable payload
-run systemctl enable check-update
-run systemctl enable ep-update
-run systemctl enable hw-update
+run systemctl enable health-logger
+run systemctl enable payload-hw-check
+run systemctl enable update-check
+run systemctl enable updater
 py "Done"
 
 pnn "- Disable WPA Supplicant Service : "
