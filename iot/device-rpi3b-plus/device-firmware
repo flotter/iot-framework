@@ -124,12 +124,12 @@ device_firmware() {
 	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/root/boot/firmware
 	mount --bind $IOT_BUILD_DIR/$DEVICE/mnt/boot $IOT_BUILD_DIR/$DEVICE/mnt/root/boot/firmware
 	mkdir -p $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
-	mount --bind $IOT_FW_DIR/$DEVICE/device-files $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
+	mount --bind $IOT_DEVICE_DIR/$DEVICE/device-files $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-files
 	
 	mv $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf.backup
 	echo "nameserver 8.8.8.8" > $IOT_BUILD_DIR/$DEVICE/mnt/root/etc/resolv.conf
 	cp -f /usr/bin/qemu-aarch64-static $IOT_BUILD_DIR/$DEVICE/mnt/root/usr/bin/
-	cp -f $IOT_FW_DIR/$DEVICE/device-prepare $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER
+	cp -f $IOT_DEVICE_DIR/$DEVICE/device-prepare $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER
 
 	echo "PRODUCTION=$PRODUCTION" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
 	echo "VERSION=$VERSION" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
