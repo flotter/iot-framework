@@ -1,48 +1,51 @@
 #!/bin/bash
 
-
 SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
-LAST_REBOOT_FILE=/home/eplayer/.last-reboot
+HOME_DIR=/home/iot
 
-UPDATE_START=$(cat /run/settings/.update | grep update-time-start | sed -n 's/[^=]*=\(.*\)/\1/p')
+# The last time the update checker issued a reboot to
+# start the update process
+LAST_REBOOT_FILE=$HOME_DIR/firmware-last-reboot.cfg
+REBOOT_COUNT_FILE=$HOME_DIR/firmware-reboots.cfg
+
+# Settings controlling update behaviour
+UPDATE_SETTINGS=/run/settings/update.cfg
+
+# When does the update window open
+UPDATE_START=$(cat $UPDATE_SETTINGS | grep update-time-start | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$UPDATE_START" == "x" ]; then
 	UPDATE_START="02:00"
 fi
 
-UPDATE_END=$(cat /run/settings/.update | grep update-time-end | sed -n 's/[^=]*=\(.*\)/\1/p')
+# When does the update window close
+UPDATE_END=$(cat $UPDATE_SETTINGS | grep update-time-end | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$UPDATE_END" == "x" ]; then
 	UPDATE_END="06:00"
 fi
 
-UPDATE_SKIP_DAYS=$(cat /run/settings/.update | grep update-time-skip-days | sed -n 's/[^=]*=\(.*\)/\1/p')
+# How many days to skip before looking for an update again
+UPDATE_SKIP_DAYS=$(cat $UPDATE_SETTINGS | grep update-time-skip-days | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$UPDATE_SKIP_DAYS" == "x" ]; then
 	UPDATE_SKIP_DAYS=0
 fi
 
-LIVE_CHECK=$(cat /run/settings/.update | grep update-live | sed -n 's/[^=]*=\(.*\)/\1/p')
+# Instant updates (debug feature)
+LIVE_CHECK=$(cat $UPDATE_SETTINGS | grep update-live | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$LIVE_CHECK" == "x" ]; then
 	LIVE_CHECK=no
 fi
 
-HEARTBEAT_RATE=$(cat /run/settings/.update | grep heartbeat-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
+# How often the unit publish a heartbeat
+HEARTBEAT_RATE=$(cat $UPDATE_SETTINGS | grep heartbeat-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$HEARTBEAT_RATE" == "x" ]; then
 	HEARTBEAT_RATE=300
 fi
 
+# The last reboot is now, we just started this script
 LAST_REBOOT=$(date +%s)
+
+# We will send a heartbeat on startup, so also now
 LAST_HEARTBEAT=$LAST_REBOOT
-
-REBOOT_FILE=.reboots
-REBOOT_DIR=/home/eplayer/music-player-stats
-
-STAT_SOURCE=eplayer-stats.csv
-
-mkdir -p $REBOOT_DIR
-touch $REBOOT_DIR/$REBOOT_FILE
-
-# RED LED (Player has now started)
-/bin/led-control led1 flash 1
-
 
 while [ true ]; do
 

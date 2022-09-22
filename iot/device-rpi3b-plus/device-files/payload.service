@@ -11,6 +11,7 @@ Type=simple
 User=root
 WorkingDirectory=/home/iot/payload
 ExecStart=/home/iot/payload/payload-start
+ExecStopPost=/home/iot/payload/payload-stop
 Restart=always
 RestartSec=5
 StandardOutput=journal

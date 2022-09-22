@@ -106,9 +106,9 @@ else
 fi
 
 pnn "- Writing firmware manifest : "
-echo "$VERSION" > $CPWD/.firmware-version
-echo "$PRODUCTION" > $CPWD/.firmware-production
-echo "$DATE" > $CPWD/.firmware-date
+echo "$VERSION" > $CPWD/firmware-version.cfg
+echo "$PRODUCTION" > $CPWD/firmware-production.cfg
+echo "$DATE" > $CPWD/firmware-date.cfg
 py "Done"
 
 pnn "- Enable Fsck on every boot : "

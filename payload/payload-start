@@ -2,4 +2,7 @@
 
 echo "Payload starting ..."
 
+# Red LED
+/bin/led-control led1 flash 1
+
 python3 alarm.py
