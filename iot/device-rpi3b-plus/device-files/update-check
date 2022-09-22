@@ -2,11 +2,18 @@
 
 SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
 HOME_DIR=/home/iot
+KEYFILE=/run/keyfile
+BOOT_DIR=/boot/firmware/iot
+UPDATE_LOOP_RATE=300
 
 # The last time the update checker issued a reboot to
 # start the update process
-LAST_REBOOT_FILE=$HOME_DIR/firmware-last-reboot.cfg
+LAST_REBOOT_UTC_FILE=$HOME_DIR/firmware-last-reboot.cfg
 REBOOT_COUNT_FILE=$HOME_DIR/firmware-reboots.cfg
+
+FW_PROD=$HOME_DIR/firmware-production.cfg
+FW_VER=$HOME_DIR/firmware-version.cfg
+FW_DATE=$HOME_DIR/firmware-date.cfg
 
 # Settings controlling update behaviour
 UPDATE_SETTINGS=/run/settings/update.cfg
@@ -42,17 +49,14 @@ if [ "x$HEARTBEAT_RATE" == "x" ]; then
 fi
 
 # The last reboot is now, we just started this script
-LAST_REBOOT=$(date +%s)
+LAST_REBOOT_UTC=$(date +%s)
 
 # We will send a heartbeat on startup, so also now
-LAST_HEARTBEAT=$LAST_REBOOT
+LAST_HEARTBEAT_UTC=$LAST_REBOOT_UTC
 
 while [ true ]; do
 
-	KEYFILE=/run/keyfile
-	BOOT_DIR=/boot/firmware/eplayer
-
-	echo "Crypt-Commission: Key generation"
+	# Key generation
 	/bin/xkey
 
 	# Make commissioning data available under /run
@@ -61,53 +65,79 @@ while [ true ]; do
 		cat $BOOT_DIR/commission.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d -k "$(cat $KEYFILE)" | tar xz -C /run
 	fi
 
-	UPDATE_TIME_START=$(date --date="$UPDATE_START" +%s)
-	UPDATE_TIME_END=$(date --date="$UPDATE_END" +%s)
-	NOW_TIME_MINUTE=$(date +%s)
+	# We only work in UTC time
+	UPDATE_START_UTC=$(date --date="$UPDATE_START" +%s)
+	UPDATE_END_UTC=$(date --date="$UPDATE_END" +%s)
+	TIME_NOW_UTC=$(date +%s)
 
-	echo "Settings (Update-start: $UPDATE_START, Update-end: $UPDATE_END, Live: $LIVE_CHECK)"
+	echo "Settings: update-time-start=$UPDATE_START, update-time-end=$UPDATE_END, update-skip-days=$UPDATE_SKIP_DAYS, update-live=$LIVE_CHECK"
 
-	UPDATE_CHECK_GO=0
-	UPDATE_FORCE_FIRST=0
-	SKIP_DAYS=$((($NOW_TIME_MINUTE - $LAST_REBOOT) / 86400))
+	# When last did we attempt an update?
+	SKIP_DAYS=$((($TIME_NOW_UTC - $LAST_REBOOT_UTC) / 86400))
 
-	echo "Skip days (Skip days now: $SKIP_DAYS, Skip days setting: $UPDATE_SKIP_DAYS)"
+	echo "Update skipped $SKIP_DAYS days."
 
-	if [ $UPDATE_TIME_START -lt $NOW_TIME_MINUTE ] && [ $UPDATE_TIME_END -gt $NOW_TIME_MINUTE ] && [ $SKIP_DAYS -ge $UPDATE_SKIP_DAYS ]; then
-		echo "We are inside the update slot..."
-		UPDATE_CHECK_GO=1
+	# Normal update inside update window
+	UPDATE_WINDOW_ACTIVE=0
+
+	if [ $UPDATE_START_UTC -lt $TIME_NOW_UTC ] && [ $UPDATE_END_UTC -gt $TIME_NOW_UTC ] && [ $SKIP_DAYS -ge $UPDATE_SKIP_DAYS ]; then
+		echo "We are inside the update window ..."
+		UPDATE_WINDOW_ACTIVE=1
 	fi
 
-	if [ $UPDATE_TIME_START -gt $LAST_REBOOT ] || [ $UPDATE_TIME_END -lt $LAST_REBOOT ]; then
-		echo "The last reboot was outside the next update slot..."
-		UPDATE_FORCE_FIRST=1
+	# If the device has not recently rebooted, we want to do so in the next
+	# valid update window, even if no updates are available. We want to
+	# publish device logs.	
+	SCHEDULE_DEVICE_LOGS_UPDATE=0
+
+	if [ $UPDATE_START_UTC -gt $LAST_REBOOT_UTC ] || [ $UPDATE_END_UTC -lt $LAST_REBOOT_UTC ]; then
+		echo "Scheduling reboot for logs publishing ..."
+		SCHEDULE_DEVICE_LOGS_UPDATE=1
 	fi
 
-	if [ "x$UPDATE_CHECK_GO" == "x1" ] || [ "x$LIVE_CHECK" == "xyes" ]; then
+	if [ "x$UPDATE_WINDOW_ACTIVE" == "x1" ] || [ "x$LIVE_CHECK" == "xyes" ]; then
 
 
-		# GREEN LED
+		# Green LED
 		/bin/led-control led0 flash 10
 
-		OLD=$(/bin/offline-version)
-		NEW=$(/bin/online-version)
-		if [ "x$OLD" != "x$NEW" ]; then
-			echo "NEW update available (Old: $OLD, New: $NEW)"
+		# Settings
+		SETTINGS_VERSION_DEVICE=$(/bin/offline-settings-version)
+		SETTINGS_VERSION_CLOUD=$(/bin/online-settings-version)
+		SETTINGS_UPDATE=0
+		if [ "x$SETTINGS_VERSION_DEVICE" != "x$SETTINGS_VERSION_CLOUD" ]; then
+			echo "New settings update available (Device: $SETTINGS_VERSION_DEVICE, Cloud: $SETTINGS_VERSION_CLOUD)"
+			SETTINGS_UPDATE=1
+		else
+			echo "No settings update available (Device: $SETTINGS_VERSION_DEVICE, Cloud: $SETTINGS_VERSION_CLOUD)"
+		fi
+		
+		# Payload
+		PAYLOAD_VERSION_DEVICE=$(/bin/offline-payload-version)
+		PAYLOAD_VERSION_CLOUD=$(/bin/online-payload-version)
+		PAYLOAD_UPDATE=0
+		if [ "x$PAYLOAD_VERSION_DEVICE" != "x$PAYLOAD_VERSION_CLOUD" ]; then
+			echo "New payload update available (Device: $PAYLOAD_VERSION_DEVICE, Cloud: $PAYLOAD_VERSION_CLOUD)"
+			PAYLOAD_UPDATE=1
+		else
+			echo "No payload update available (Device: $PAYLOAD_VERSION_DEVICE, Cloud: $PAYLOAD_VERSION_CLOUD)"
+		fi
+
+		# Logs
+		LOGS_UPDATE=0
+		if [ "x$UPDATE_WINDOW_ACTIVE" == "x1" ] && [ "x$SCHEDULE_DEVICE_LOGS_UPDATE" == "x1" ]; then
+			echo "Logs getting published on reboot ..."
+			LOGS_UPDATE=1
+		fi
+
+		if [ $SETTINGS_UPDATE -eq 1 ] || [ $PAYLOAD_UPDATE -eq 1 ] || [ $LOGS_UPDATE -eq 1 ]; then
+			echo "Rebooting ..."
 			sync
 			reboot
-		else
-			echo "NO update available (Old: $OLD, New: $NEW)"
-
-			# Stats update on first opportunity in update slot
-			if [ "x$UPDATE_CHECK_GO" == "x1" ] && [ "x$UPDATE_FORCE_FIRST" == "x1" ]; then
-				echo "We reboot only to update stats (no update available)"
-				sync
-				reboot
-			fi
 		fi
 
 	else
-		echo "Not time yet to check for update (Now: $NOW_TIME_MINUTE, Update-start: $UPDATE_TIME_START, Update-end: $UPDATE_TIME_END)"
+		echo "Update window not ready: Now=$TIME_NOW_UTC, Start=$UPDATE_START_UTC, End=$UPDATE_END_UTC"
 	fi
 
 	# Update Green LED state
@@ -121,31 +151,18 @@ while [ true ]; do
 		/bin/led-control led0 off
 	fi
 
-
-	BEAT_DELTA=$((NOW_TIME_MINUTE - LAST_HEARTBEAT))
-	if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT -eq $LAST_REBOOT ]; then
+	# Heartbeat is mostly a debug feature, but it provides live device health
+	# information without needing a reboot to publish logs.
+	BEAT_DELTA=$((TIME_NOW_UTC - LAST_HEARTBEAT_UTC))
+	if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
 
 		# Delay after reboot so we capture actual state
-		if [ $LAST_HEARTBEAT -eq $LAST_REBOOT ]; then
+		if [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
 			echo "Sleeping 60 seconds after reboot before updating heartbeat..."
 			sleep 60
 		fi
 		
-		LAST_HEARTBEAT=$(date +%s)
-
-		echo "Space:"
-		df -h			
-
-		echo "Power State: $(vcgencmd get_throttled | cut -d'=' -f2)"
-	
-		echo "Wifi Hotspots:"
-		iwlist wlan0 scan
-		
-		echo "Network State:"
-		ip a
-		
-		echo "Wifi Connection State:"
-		iwconfig wlan0
+		LAST_HEARTBEAT_UTC=$(date +%s)
 
 		echo "Updating heartbeat ..."
 
@@ -156,26 +173,32 @@ while [ true ]; do
 			ONLINE=1
 		fi
 		
-		if [ $ONLINE -eq 1 ] && [ -f /run/commission/.s3cfg-music ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
-			T="$(date)"
-			L=$(/bin/offline-version)
-			O=$(/bin/online-version)
-			echo "TIMESTAMP: $T" > /run/.heartbeat
-			echo "ONLINE VERSION: $O" >> /run/.heartbeat
-			echo "LOCAL VERSION: $L" >> /run/.heartbeat
-			echo "REBOOTS: $(cat $REBOOT_DIR/$REBOOT_FILE)" >> /run/.heartbeat
-			echo "POWER: $(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/.heartbeat
-			echo "FW: $(cat /home/eplayer/.firmware_version)" >> /run/.heartbeat
+		if [ $ONLINE -eq 1 ] && [ -f /run/commission/s3cfg-upload.cfg ] && [ -f /run/commission/cust.cfg ] && [ -f /run/commission/site.cfg ]; then
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat.txt
-			
-			journalctl -u ep -a -n 50 > /run/.heartbeat
+			# Clear heartbeat file
+			cat /dev/null > /run/heartbeat.cfg
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-ep.txt
-			
-			cat $REBOOT_DIR/$STAT_SOURCE | tail -n10 > /run/.heartbeat
+			echo "timestamp=$(date --utc)" >> /run/heartbeat.cfg
+			echo "settings-online-version=$(/bin/online-settings-version)" >> /run/heartbeat.cfg
+			echo "settings-offline-version=$(/bin/offline-settings-version)" >> /run/heartbeat.cfg
+			echo "payload-online-version=$(/bin/online-payload-version)" >> /run/heartbeat.cfg
+			echo "payload-offline-version=$(/bin/offline-payload-version)" >> /run/heartbeat.cfg
+			echo "power-state=$(vcgencmd get_throttled | cut -d'=' -f2)" >> /run/heartbeat.cfg
+			echo "last-reboot=$(cat $LAST_REBOOT_UTC_FILE)" >> /run/heartbeat.cfg
+			echo "reboots=$(cat $REBOOT_COUNT_FILE)" >> /run/heartbeat.cfg
+			echo "firmware-version=$(cat $FW_VER)" >> /run/heartbeat.cfg
+			echo "firmware-production=$(cat $FW_PROD)" >> /run/heartbeat.cfg
+			echo "firmware-date==$(cat $FW_DATE)" >> /run/heartbeat.cfg			
 
-			s3cmd -q -f --config /run/commission/.s3cfg-ctrl put --no-preserve /run/.heartbeat s3://ep-stats/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-player.txt
+			# Upload the heartbeat
+			s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/heartbeat.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-info.txt
+
+			journalctl -u payload -a -n 50 > /run/payload.cfg
+
+			# Upload a payload log snippet			
+			s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/payload.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-payload.txt
+		else
+			echo "Not ready to update heartbeat internet is offline"
 		fi		
 	else
 		echo "Not ready to update heartbeat (Delta: $BEAT_DELTA, Rate: $HEARTBEAT_RATE)"
@@ -185,6 +208,7 @@ while [ true ]; do
 	rm -rf /run/commission
 	rm -rf $KEYFILE
 	
-	sleep 300
+	# This controls how fast live update can react
+	sleep $UPDATE_LOOP_RATE
 done
 

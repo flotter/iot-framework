@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Settings controlling update behaviour
+UPDATE_SETTINGS=/run/settings/update.cfg
+
+# Health logger update rate
+HEALTH_LOGGER_RATE=$(cat $UPDATE_SETTINGS | grep health-logger-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$HEALTH_LOGGER_RATE" == "x" ]; then
+	HEALTH_LOGGER_RATE=0
+fi
+
+# Last run
+HEALTH_LOGGER_LAST=$(date +%s)
+
+UPDATE_LOOP_RATE=300
+
+# Check if the logger is disabled
+if [ $HEALTH_LOGGER_RATE -ne 0 ]; then
+	echo "Health logger disabled ..."
+else
+	echo "Health logger rate is: $HEALTH_LOGGER_RATE"
+fi
+
+while [ true ]; do
+	
+	TIME_NOW_UTC=$(date +%s)
+
+	DELTA=$((TIME_NOW_UTC - HEALTH_LOGGER_LAST))
+	if [ $DELTA -gt $HEALTH_LOGGER_RATE ] && [ $HEALTH_LOGGER_RATE -ne 0 ]; then
+
+		HEALTH_LOGGER_LAST=$(date +%s)
+
+		echo "Space:"
+		df -h			
+
+		echo "Power State: $(vcgencmd get_throttled | cut -d'=' -f2)"
+	
+		echo "Wifi Hotspots:"
+		iwlist wlan0 scan
+		
+		echo "Network State:"
+		ip a
+		
+		echo "Wifi Connection State:"
+		iwconfig wlan0
+
+	fi
+	
+	# This controls how fast live update can react
+	sleep $UPDATE_LOOP_RATE
+done

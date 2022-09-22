@@ -1,0 +1,15 @@
+[Unit]
+Description="Health Logger"
+After=updater.service
+Wants=updater.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/health-logger
+Restart=always
+RestartSec=5
+StandardOutput=journal
+
+[Install]
+WantedBy=default.target
