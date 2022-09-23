@@ -170,6 +170,7 @@ pl
 pg ":: Domain Settings Update ::"
 pl
 
+DOMAINS_MAX=${#DOMAINS[@]}
 DOMAINS_COUNT=0
 
 while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
