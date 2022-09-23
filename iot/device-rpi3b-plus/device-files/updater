@@ -52,7 +52,7 @@ update_payload() {
 		RETRY=$((RETRY + 1))
 		echo "Sync attempt $RETRY for payload"
 	
-		s3cmd -v --config /run/commission/s3cfg-download.cfg --no-check-md5 sync --no-preserve --delete-removed s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/payload/ $ENC_DRIVE/update/
+		s3cmd -v --config /run/commission/s3cfg-download.cfg sync --no-preserve --delete-removed s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/payload/ $ENC_DRIVE/update/
 		RET=$?
 
 		if [ $RET -ne 0 ]; then
@@ -102,7 +102,7 @@ update_settings() {
 		RETRY=$((RETRY + 1))
 		echo "Sync attempt $RETRY for settings"
 	
-		s3cmd -v --config /run/commission/s3cfg-download.cfg --no-check-md5 sync --no-preserve --delete-removed s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/settings/ $BOOT_DIR/settings/
+		s3cmd -v --config /run/commission/s3cfg-download.cfg sync --no-preserve --delete-removed s3://iot-device-download/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/settings/ $BOOT_DIR/settings/
 		RET=$?
 
 		if [ $RET -ne 0 ]; then
