@@ -215,6 +215,10 @@ while [ true ]; do
 	rm -rf $KEYFILE
 	
 	# This controls how fast live update can react
-	sleep $UPDATE_LOOP_RATE
+	if [ "x$LIVE_CHECK" == "xyes" ]; then
+		sleep 30
+	else
+		sleep $UPDATE_LOOP_RATE
+	fi
 done
 
