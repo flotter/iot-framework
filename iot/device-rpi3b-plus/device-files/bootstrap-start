@@ -7,6 +7,8 @@ BOOT_DIR=/boot/firmware/iot
 ENCRYPT_FLAG=$BOOT_DIR/payload-encrypted.flag
 FORMAT_FLAG=$BOOT_DIR/payload-formatted.flag
 
+SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs)
+
 KEYFILE=/run/keyfile
 ENC_NAME=enc
 ENC_PATH=/home/iot/$ENC_NAME
@@ -92,6 +94,15 @@ fi
 if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then
 	rm -rf /run/commission
 	cat $BOOT_DIR/commission.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d -k "$(cat $KEYFILE)" | tar xz -C /run
+fi
+
+# Create payload access to some information
+if [ -d /run/commission ]; then
+        mkdir -p /run/payload-runtime
+        echo "$SERIAL" > /run/payload-runtime/serial.cfg
+        echo "$(cat /run/commission/cust.cfg)" > /run/payload-runtime/cust.cfg
+        echo "$(cat /run/commission/site.cfg)" > /run/payload-runtime/site.cfg
+
 fi
 
 # Make settings data available under /run

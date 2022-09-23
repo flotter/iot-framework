@@ -70,9 +70,6 @@ if [ "x$PRODUCTION" == "xtrue" ]; then
 	echo "### RPI3B ###" > $CONFIG_USR
 	echo "" >> $CONFIG_USR
 	echo "dtoverlay=disable-bt" >> $CONFIG_USR
-	run systemctl disable hciuart.service
-	run systemctl disable bluealsa.service
-	run systemctl disable bluetooth.service
 
 	pnn "- Disabling Bluetooth : "
 	py "Done"
@@ -92,9 +89,6 @@ else
 	echo "### RPI3B ###" > $CONFIG_USR
 	echo "" >> $CONFIG_USR 
 	echo "dtoverlay=disable-bt" >> $CONFIG_USR
-	run systemctl disable hciuart.service
-	run systemctl disable bluealsa.service
-	run systemctl disable bluetooth.service
 	
 	pnn "- Disabling Bluetooth : "
 	py "Done"
@@ -153,6 +147,8 @@ run apt-get install -y build-essential vim nano cryptsetup python3-distutils iw 
 run apt-get install -y python3-pip
 run python3 -m pip install --upgrade pip
 run python3 -m pip install s3cmd
+run python3 -m pip install paho-mqtt
+run python3 -m pip install sh
 py "Done"
 
 pnn "- Creating /tmp : "
