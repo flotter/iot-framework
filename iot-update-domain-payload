@@ -177,7 +177,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	SITE=$(basename $DOMAIN_NEXT)
 
 	pnn "- Publish master payload to domain ($DOMAIN_NEXT) : "
-        UPDATE=$(rsync -ai --delete $REPO_ROOT/payload/ $MASTER_DB/$CUST/$SITE/payload/)
+        UPDATE=$(rsync -ai --delete --exclude version.cfg $REPO_ROOT/payload/ $MASTER_DB/$CUST/$SITE/payload/)
         sync
 	PAYLOAD_UPDATE_STATUS="No Change"
 	if [ -n "$UPDATE" ]; then
