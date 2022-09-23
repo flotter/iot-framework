@@ -1,0 +1,194 @@
+#!/bin/bash -e
+
+CPWD="$( cd "$(dirname "$0")" ; pwd -P )"
+
+#----------------------------------------------------#
+# COMMON ATTRIBUTES                                  #
+#----------------------------------------------------#
+
+source $CPWD/scripts/iot-utils
+
+#----------------------------------------------------#
+# DEFINES / MACROS                                   #
+#----------------------------------------------------#
+
+LOG=$LOGS_DIR/iot-update-domain-payload.log
+
+#----------------------------------------------------#
+# CMDLINE OPTIONS                                    #
+#----------------------------------------------------#
+
+ARGC=$#
+ARGV=("$@")
+
+VERBOSE=false
+HELP=false
+
+# Clear args
+set --
+
+COUNT=0
+while [ $COUNT -lt $ARGC ]; do
+	STRIP=${ARGV[COUNT]}
+
+	ID=0
+	LONGFORMAT=`echo $STRIP | cut -b 1-2`
+	if [ "x$LONGFORMAT" == "x--" ]; then
+		STRIP=`echo ${ARGV[COUNT]} | cut -b 2-3`
+	else
+		ID=`echo $STRIP | cut -b 3-`
+		STRIP=`echo $STRIP | cut -b 1-2`
+	fi
+	
+
+	if [ "x$STRIP" == "x-v" ]; then
+		VERBOSE=true
+	elif [ "x$STRIP" == "x-h" ]; then
+		HELP=true
+	else
+		pl
+		pr "Error: Unknown argument"
+		COUNT=$ARGC
+		HELP=true
+	fi
+COUNT=$((COUNT+1))
+done
+
+log "Started"
+
+pl
+pg "iot-update-domain-payload ($VERSION)"
+
+if [ "$HELP" == "true" ]; then
+        pl
+	pn "Usage:"
+	pl
+        pn "Update selected master database domains from the master payload."
+        pl
+	pn "iot-update-domain-payload [-v] [-h] ..."
+	pl
+	pn "Help:"
+	pl
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
+	pl
+	exit 1
+fi
+
+#----------------------------------------------------#
+# PREPARE                                            #
+#----------------------------------------------------#
+
+pn
+pg ":: Setup & Checks ::"
+pn
+
+common_setup
+
+log "Common Setup OK"
+
+pnn "- Admin mode enabled : "
+ADMIN=$(admin)
+if [ "x$ADMIN" == "x1" ]; then
+	pg "Yes"
+else
+	pg "No"
+fi
+
+#----------------------------------------------------#
+# BODY                                               #
+#----------------------------------------------------#
+
+pl
+pg ":: Domain Selection ::"
+pl
+
+DOMAIN=$(domain)
+
+if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		CUST_WILDCARD="*** All Customers IDs and Site IDs (dangerous) ***"
+		select_domain_cust "$CUST_WILDCARD"
+		pl
+
+		if [ ! -z "$CUST" ]; then
+			SITE_WILDCARD="*** All Site IDs for selected Customer ID (dangerous) ***"
+			select_domain_site "$SITE_WILDCARD"
+			pl
+
+			pnn "- Domain selected : "
+			if [ -z "$SITE" ]; then
+				pg "$CUST/*"
+			else
+				pg "$CUST/$SITE"
+			fi
+			pl
+		else
+			SITE=
+			pnn "- Domain selected : "
+			pg "*/*"
+			pl
+		fi
+
+		domain_iterate
+	else
+		err "No default domain is set. Without Admin mode we cannot proceed."
+	fi
+else
+	# Single Default domain (Non-admin mode compatible)
+	DOMAINS=($DOMAIN)
+	pnn "- Domain selected : "
+	pg "$DOMAIN"
+	pl
+fi
+
+
+pg ":: Master Payload Verification ::"
+pl
+
+pnn "- Master payload location valid : "
+if [ -d $REPO_ROOT/payload ]; then
+	pg "Yes"
+else
+	err "Payload folder does not exist"
+fi
+
+pnn "- Master payload size check : "
+S=$(du -hs --block-size=1M $REPO_ROOT/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
+if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
+	err "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($REPO_ROOT/payload)"
+fi
+pg "Done"
+
+pl
+pg ":: Domain Payload Update ::"
+pl
+
+DOMAINS_COUNT=0
+
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
+
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+
+	pnn "- Publish master payload to domain ($DOMAIN_NEXT) : "
+        UPDATE=$(rsync -ai --delete $REPO_ROOT/payload $MASTER_DB/$CUST/$SITE/payload)
+        sync
+	PAYLOAD_UPDATE_STATUS="No Change"
+	if [ -n "$UPDATE" ]; then
+		PAYLOAD_UPDATE_STATUS="Updated"
+	fi
+	pg "Done"
+
+	pnn "- Domain ($DOMAIN_NEXT) change status : "
+	pg "$PAYLOAD_UPDATE_STATUS"
+	
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+
+done
+
+pl

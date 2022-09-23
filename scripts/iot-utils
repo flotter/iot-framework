@@ -157,13 +157,14 @@ common_setup() {
 	if [ -z "$DEB_DONE_UTC" ]; then
 		DEB_DONE_UTC=$UTC_NOW
 	fi
-	DELTA=$((UTC_NOW - DEB_DONE_UTC))
+	DELTA=$(($UTC_NOW - $DEB_DONE_UTC))
         if [ $DELTA -gt 86400 ] || [ $DELTA -eq 0 ]; then
 		run sudo apt-get install -y git build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ntpdate
 		run apt-get install -y python3-pip
 		run python3 -m pip install --upgrade pip
 		run python3 -m pip install s3cmd
 	fi
+        sed -i '/IOT_DEBS/d' $TOOL_SETTINGS
 	echo "IOT_DEBS=$UTC_NOW" >> $TOOL_SETTINGS
 	pg "Done"
 	
@@ -175,10 +176,11 @@ common_setup() {
 	if [ -z "$NTP_DONE_UTC" ]; then
 		NTP_DONE_UTC=$UTC_NOW
 	fi
-	DELTA=$((UTC_NOW - NTP_DONE_UTC))
+	DELTA=$(($UTC_NOW - $NTP_DONE_UTC))
         if [ $DELTA -gt 86400 ] || [ $DELTA -eq 0 ]; then
 		run ntpdate ntp.is.co.za
 	fi
+        sed -i '/IOT_NTP/d' $TOOL_SETTINGS
 	echo "IOT_NTP=$UTC_NOW" >> $TOOL_SETTINGS
 	pg "Done"
 	

@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-domain-cloud-update-payload.log
+LOG=$LOGS_DIR/iot-update-domain-settings.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,15 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-cloud-update-payload ($VERSION)"
+pg "iot-update-domain-settings ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Upload the domain settings to the cloud."
+        pn "Update selected master database domains from the master settings."
         pl
-	pn "iot-domain-cloud-update-payload [-v] [-h] ..."
+	pn "iot-update-domain-settings [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -145,39 +145,29 @@ else
 fi
 
 
-pg ":: Domain Payload Verification ::"
+pg ":: Master Settings Verification ::"
 pl
-
-
-DOMAINS_MAX=${#DOMAINS[@]}
-DOMAINS_COUNT=0
-
-while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
-
-	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
-
-	CUST=$(dirname $DOMAIN_NEXT)
-	SITE=$(basename $DOMAIN_NEXT)
 	
-	pnn "- Domain ($DOMAIN_NEXT) payload location valid : "
-	if [ -d $MASTER_DB/$DOMAIN_NEXT/payload ]; then
-		pg "Yes"
-	else
-		err "Payload folder does not exist"
-	fi
-	
-	pnn "- Domain ($DOMAIN_NEXT) payload size check : "
-	S=$(du -hs --block-size=1M $MASTER_DB/$CUST/$SITE/payload | sed -n 's/^\([0-9.]*\).*/\1/p')
-	if [ $S -gt $FIRMWARE_PAYLOAD_MAX_SIZE ]; then
-		err "Payload exceeds ${FIRMWARE_PAYLOAD_MAX_SIZE}MiB ($CUST/$SITE/payload)"
-	fi
-	pg "Done"
+pnn "- Master settings location valid : "
+if [ -d $REPO_ROOT/settings ]; then
+	pg "Yes"
+else
+	err "Settings folder does not exist"
+fi
 
-	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
-done
+pnn "-  Master Netplan verification : "
+NPVER=$(mktemp -d)
+/lib/netplan/generate -r $NPVER $REPO_ROOT/settings/networking.cfg
+RET=$?
+
+rm -rf $NPVER
+if [ $RET -ne 0 ]; then
+	err "Wifi settings invalid ($REPO_ROOT/settings/networking.cfg)"
+fi
+pg "Pass"
 
 pl
-pg ":: Domain Payload Cloud Update ::"
+pg ":: Domain Settings Update ::"
 pl
 
 DOMAINS_COUNT=0
@@ -189,12 +179,17 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	CUST=$(dirname $DOMAIN_NEXT)
 	SITE=$(basename $DOMAIN_NEXT)
 
-	pnn "- Domain ($DOMAIN_NEXT) publish payload : "
-	update_payload_check
+	pnn "- Publish master settings to domain ($DOMAIN_NEXT) : "
+        UPDATE=$(rsync -ai --delete $REPO_ROOT/settings $MASTER_DB/$CUST/$SITE/settings)
+        sync
+	SETTINGS_UPDATE_STATUS="No Change"
+	if [ -n "$UPDATE" ]; then
+		SETTINGS_UPDATE_STATUS="Updated"
+	fi
 	pg "Done"
 
 	pnn "- Domain ($DOMAIN_NEXT) change status : "
-	pg "$PAYLOAD_UPDATE_STATUS"
+	pg "$SETTINGS_UPDATE_STATUS"
 	
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
 

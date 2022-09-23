@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-domain-cloud-update-settings.log
+LOG=$LOGS_DIR/iot-update-cloud-settings.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,15 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-cloud-update-settings ($VERSION)"
+pg "iot-update-cloud-settings ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Upload the domain settings to the cloud."
+        pn "Update selected cloud domains from the master database settings."
         pl
-	pn "iot-domain-cloud-update-settings [-v] [-h] ..."
+	pn "iot-update-cloud-settings [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl

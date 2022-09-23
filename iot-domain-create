@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-domain-create-or-update.log
+LOG=$LOGS_DIR/iot-domain-create.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,16 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-domain-create-or-update ($VERSION)"
+pg "iot-domain-create ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Create new domain with latest settings and payload, or update"
-	pn "the settings and payload of an existing domain."
+        pn "Create new domain with latest settings and payload."
         pl
-	pn "iot-domain-create-or-update [-v] [-h] ..."
+	pn "iot-domain-create [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -99,7 +98,7 @@ log "Admin OK"
 #----------------------------------------------------#
 
 pl
-pg ":: Add or Update Domain Confirmation ::"
+pg ":: Add Domain Confirmation ::"
 pl
 pnn "Type 'ok' and Enter to continue : "
 read SELECT
@@ -271,7 +270,7 @@ if [ "x$SELECT" != "xok" ]; then
 	err "User aborted."
 fi
 
-log "Creating or Updating Customer ID: $CUST, Site ID: $SITE"
+log "Creating Customer ID: $CUST, Site ID: $SITE"
 
 pl
 pg ":: Performing Actions ::"
