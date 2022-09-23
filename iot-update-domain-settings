@@ -181,7 +181,7 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	SITE=$(basename $DOMAIN_NEXT)
 
 	pnn "- Publish master settings to domain ($DOMAIN_NEXT) : "
-        UPDATE=$(rsync -ai --delete $REPO_ROOT/settings $MASTER_DB/$CUST/$SITE/settings)
+        UPDATE=$(rsync -ai --delete $REPO_ROOT/settings/ $MASTER_DB/$CUST/$SITE/settings/)
         sync
 	SETTINGS_UPDATE_STATUS="No Change"
 	if [ -n "$UPDATE" ]; then
