@@ -155,7 +155,7 @@ else
 	err "Settings folder does not exist"
 fi
 
-pnn "-  Master Netplan verification : "
+pnn "- Master Netplan verification : "
 NPVER=$(mktemp -d)
 /lib/netplan/generate -r $NPVER $REPO_ROOT/settings/networking.cfg
 RET=$?
