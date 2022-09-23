@@ -168,7 +168,7 @@ while [ true ]; do
 			
 			LAST_HEARTBEAT_UTC=$(date +%s)
 	
-			echo "Updating heartbeat ..."
+			echo "Internet Check"
 	
 			ONLINE=0		
 			wget -q --spider http://google.com
@@ -201,6 +201,7 @@ while [ true ]; do
 	
 				# Upload a payload log snippet			
 				s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/payload.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-payload.txt
+				echo "Heartbeat published"
 			else
 				echo "Not ready to update heartbeat internet is offline"
 			fi		
