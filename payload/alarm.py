@@ -3,6 +3,7 @@ import paho.mqtt.client as paho
 import ssl
 import json
 import sh
+import random
 
 def cust():
     return sh.cat("/run/payload-runtime/cust.cfg").strip()
@@ -41,14 +42,48 @@ client.connect("mqtt.iot-training.net", 8883, 60)
 ##start loop to process received messages
 client.loop_start()
 
+channels = [
+     {
+         "state": 0,
+         "prev" : 0
+     },
+     {
+         "state": 0,
+         "prev" : 0
+     },
+]
+
+print("Hello!")
 
 while True:
-    print("Sending next message ...")
-    client.publish(f"iot/{cust()}/{site()}/{serial()}",json.dumps(
-        {
-            "settings_version" : int(settings_version()),
-            "payload_version" : int(payload_version()),
-            "reboots" : int(reboots())
-        }
-    ))
-    time.sleep(5)
+    client.publish(
+        f"iot/{cust()}/{site()}/{serial()}/health",
+        json.dumps(
+            {
+                "settings_version" : int(settings_version()),
+                "payload_version" : int(payload_version()),
+                "reboots" : int(reboots()),
+            }
+        )
+    )
+
+    for i, v in enumerate(channels):
+        if v["state"] != 0:
+            # Reset of one iteration
+            v["state"] = 0
+        else:
+            # Randomize the trigger
+            v["state"] = random.choice([0, 1])
+
+        if v["state"] != v["prev"]:
+            v["prev"] = v["state"]
+            client.publish(
+                f"iot/{cust()}/{site()}/{serial()}/{i+1}",
+                json.dumps(
+                    {
+                        "state" : v["state"]
+                    }
+                )
+            )
+
+    time.sleep(10)
