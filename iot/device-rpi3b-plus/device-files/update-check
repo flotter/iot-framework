@@ -4,7 +4,6 @@ SERIAL=$(cat /proc/cpuinfo | grep Serial | sed -n 's/^[^:]*:\(.*\)/\1/p' | xargs
 HOME_DIR=/home/iot
 KEYFILE=/run/keyfile
 BOOT_DIR=/boot/firmware/iot
-UPDATE_LOOP_RATE=300
 
 # The last time the update checker issued a reboot to
 # start the update process
@@ -40,6 +39,12 @@ fi
 LIVE_CHECK=$(cat $UPDATE_SETTINGS | grep update-live | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$LIVE_CHECK" == "x" ]; then
 	LIVE_CHECK=no
+fi
+
+# Tick rate
+TICK_RATE=$(cat $UPDATE_SETTINGS | grep tick-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$TICK_RATE" == "x" ]; then
+	TICK_RATE=1
 fi
 
 # How often the unit publish a heartbeat
@@ -160,10 +165,8 @@ while [ true ]; do
 		BEAT_DELTA=$((TIME_NOW_UTC - LAST_HEARTBEAT_UTC))
 		if [ $BEAT_DELTA -gt $HEARTBEAT_RATE ] || [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
 	
-			# Delay after reboot so we capture actual state
 			if [ $LAST_HEARTBEAT_UTC -eq $LAST_REBOOT_UTC ]; then
-				echo "Sleeping 60 seconds after reboot before updating heartbeat..."
-				sleep 60
+				echo "Updating heartbeat straight after reboot ..."
 			fi
 			
 			LAST_HEARTBEAT_UTC=$(date +%s)
@@ -215,10 +218,6 @@ while [ true ]; do
 	rm -rf $KEYFILE
 	
 	# This controls how fast live update can react
-	if [ "x$LIVE_CHECK" == "xyes" ]; then
-		sleep 30
-	else
-		sleep $UPDATE_LOOP_RATE
-	fi
+	sleep $TICK_RATE
 done
 

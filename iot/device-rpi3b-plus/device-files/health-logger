@@ -3,6 +3,12 @@
 # Settings controlling update behaviour
 UPDATE_SETTINGS=/run/settings/update.cfg
 
+# Tick rate
+TICK_RATE=$(cat $UPDATE_SETTINGS | grep tick-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
+if [ "x$TICK_RATE" == "x" ]; then
+	TICK_RATE=1
+fi
+
 # Health logger update rate
 HEALTH_LOGGER_RATE=$(cat $UPDATE_SETTINGS | grep health-logger-rate | sed -n 's/[^=]*=\(.*\)/\1/p')
 if [ "x$HEALTH_LOGGER_RATE" == "x" ]; then
@@ -11,8 +17,6 @@ fi
 
 # Last run
 HEALTH_LOGGER_LAST=$(date +%s)
-
-UPDATE_LOOP_RATE=300
 
 # Check if the logger is disabled
 if [ $HEALTH_LOGGER_RATE -eq 0 ]; then
@@ -47,5 +51,5 @@ while [ true ]; do
 	fi
 	
 	# This controls how fast live update can react
-	sleep $UPDATE_LOOP_RATE
+	sleep $TICK_RATE
 done
