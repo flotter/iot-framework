@@ -135,24 +135,18 @@ if [ ! -z "$FIRMWARE_REMOTE" ]; then
 	pg "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz"
 
 	pnn "- Firmware Downloading : "
-	run mkdir -p $IOT_DOWNLOAD_DIR
-	run rm -rf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz
-	download_remote_fw_check "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz" $IOT_DOWNLOAD_DIR/
+	run mkdir -p $IOT_DOWNLOAD_DIR/$DEVICE
+	run rm -rf $IOT_DOWNLOAD_DIR/$DEVICE/${FIRMWARE_REMOTE}*
+	download_remote_fw_check "$S3_DEVICE_FW/$DEVICE/$FIRMWARE_REMOTE.tar.gz" $IOT_DOWNLOAD_DIR/$DEVICE/
 	pg "Done"
 
 	pnn "- Firmware Decompressing : "
-	run mkdir -p $IOT_FW_DIR
-        run rm -rf $IOT_FW_DIR/$FIRMWARE_REMOTE
-        run tar xvzf $IOT_DOWNLOAD_DIR/$FIRMWARE_REMOTE.tar.gz -C $IOT_FW_DIR/
+        run tar xvzf $IOT_DOWNLOAD_DIR/$DEVICE/$FIRMWARE_REMOTE.tar.gz -C $IOT_DOWNLOAD_DIR/$DEVICE/
 	return_check "Failed to decompress remote firmware."
 	pg "Done"
 
 	pnn "- Ready for commissioning : "
-	run mkdir -p $IOT_FW_DIR
-	run rm -rf $IOT_FW_DIR/tmp.img
-	mv $IOT_FW_DIR/$FIRMWARE_REMOTE $IOT_FW_DIR/tmp.img
-	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_REMOTE
-	FIRMWARE_NAME=$IOT_FW_DIR/tmp.img
+	FIRMWARE_BASE=$IOT_DOWNLOAD_DIR/$DEVICE/$FIRMWARE_REMOTE
 	pg "Yes"
 else
 	select_local_fw
@@ -162,11 +156,7 @@ else
 	pg "$IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL"
 	
 	pnn "- Ready for commissioning : "
-	run mkdir -p $IOT_FW_DIR
-	run rm -rf $IOT_FW_DIR/tmp.img
-	cp $IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL $IOT_FW_DIR/tmp.img
-	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$DEVICE/$FIRMWARE_LOCAL
-	FIRMWARE_NAME=$IOT_FW_DIR/tmp.img
+	FIRMWARE_BASE=$IOT_BUILD_DIR/$DEVICE/$FIRMWARE_LOCAL
 	pg "Yes"
 fi
 
@@ -322,11 +312,8 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 
 done
 
-log "Commissioning Temp Image Name: $FIRMWARE_NAME"
-log "Commissioning Final Image Name: $FIRMWARE_NAME_FINAL"
-
 pl
-pg ":: Commissioning Image ::"
+pg ":: Commissioning Image(s) ::"
 pl
 
 if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-commission ]; then
@@ -335,14 +322,47 @@ fi
 
 source $IOT_DEVICE_DIR/$DEVICE/device-commission
 
-device_commission
+DOMAINS_COUNT=0
 
-mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
-rm -rf $FIRMWARE_NAME_FINAL
-mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 
-pl
-pnn "Device firmware commissioned and ready for flashing : "
-pg "$FIRMWARE_NAME_FINAL"
+	DOMAIN_NEXT=${DOMAINS[$DOMAINS_COUNT]}
+
+	CUST=$(dirname $DOMAIN_NEXT)
+	SITE=$(basename $DOMAIN_NEXT)
+
+        pnn "- Domain selected for commissioning : "
+        pg "$DOMAIN_NEXT"
+
+        pnn "- Creating domain specific firmware image : "
+
+	mkdir -p $IOT_FW_DIR/$CUST/$SITE
+	rm -rf $IOT_FW_DIR/$CUST/$SITE/tmp.img
+	rm -rf $IOT_FW_DIR/$CUST/$SITE/$(basename $FIRMWARE_BASE .img)*
+
+	FIRMWARE_NAME=$IOT_FW_DIR/$CUST/$SITE/tmp.img
+	cp -f $FIRMWARE_BASE $FIRMWARE_NAME
+
+        pg "Done"
+
+	log "Commissioning Temp Image Name: $FIRMWARE_NAME"
+
+	device_commission
+
+	FIRMWARE_NAME_FINAL=$IOT_FW_DIR/$CUST/$SITE/$(basename $FIRMWARE_BASE .img)-commissioned.img
+	mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
+	rm -rf $FIRMWARE_NAME_FINAL
+	mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+
+	log "Commissioning Final Image Name: $FIRMWARE_NAME_FINAL"
+
+	pnn "- Commmissioned and ready for flashing : "
+	pg "$FIRMWARE_NAME_FINAL"
+	pl
+
+	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+
+done
+
 pl
 
