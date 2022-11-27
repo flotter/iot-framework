@@ -66,7 +66,6 @@ device_firmware() {
 	run truncate -s ${BUILD_SIZE}M $FIRMWARE_NAME
 	return_check "Image file resizing failed."
 	
-	LOOPDEV=$(losetup --show -f $FIRMWARE_NAME)
 	{
 	    (
 	    echo d
@@ -87,10 +86,11 @@ device_firmware() {
 	    echo +128M
 	    sleep 1
 	    echo w
-	    ) | fdisk $LOOPDEV
+	    ) | fdisk $FIRMWARE_NAME
 	} > /dev/null 2>&1
 	
 	sync
+	LOOPDEV=$(losetup --show -f $FIRMWARE_NAME)
 	partprobe ${LOOPDEV}
 
 	run e2fsck -f -p ${LOOPDEV}p2
