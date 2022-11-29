@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-update-domain-settings.log
+LOG=$LOGS_DIR/iot-domain-logs.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,15 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-update-domain-settings ($VERSION)"
+pg "iot-domain-logs ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Update selected master database domains from the master settings."
+        pn "Download all endpoint logs for this domain."
         pl
-	pn "iot-update-domain-settings [-v] [-h] ..."
+	pn "iot-domain-logs [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -116,12 +116,10 @@ if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
 			else
 				pg "$CUST/$SITE"
 			fi
-			pl
 		else
 			SITE=
 			pnn "- Domain selected : "
 			pg "*/*"
-			pl
 		fi
 
 		domain_iterate
@@ -133,33 +131,11 @@ else
 	DOMAINS=($DOMAIN)
 	pnn "- Domain selected : "
 	pg "$DOMAIN"
-	pl
 fi
 
-
-pg ":: Master Settings Verification ::"
-pl
-	
-pnn "- Master settings location valid : "
-if [ -d $REPO_ROOT/settings ]; then
-	pg "Yes"
-else
-	err "Settings folder does not exist"
-fi
-
-pnn "- Master Netplan verification : "
-NPVER=$(mktemp -d)
-/lib/netplan/generate -r $NPVER $REPO_ROOT/settings/networking.cfg
-RET=$?
-
-rm -rf $NPVER
-if [ $RET -ne 0 ]; then
-	err "Wifi settings invalid ($REPO_ROOT/settings/networking.cfg)"
-fi
-pg "Pass"
 
 pl
-pg ":: Domain Settings Update ::"
+pg ":: Domain Log Retrieval ::"
 pl
 
 DOMAINS_MAX=${#DOMAINS[@]}
@@ -172,19 +148,13 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 	CUST=$(dirname $DOMAIN_NEXT)
 	SITE=$(basename $DOMAIN_NEXT)
 
-	pnn "- Publish master settings to domain ($DOMAIN_NEXT) : "
-        UPDATE=$(rsync -ai --delete --exclude version.cfg $REPO_ROOT/settings/ $MASTER_DB/$CUST/$SITE/settings/)
-        sync
-	SETTINGS_UPDATE_STATUS="No Change"
-	if [ -n "$UPDATE" ]; then
-		SETTINGS_UPDATE_STATUS="Updated"
-	fi
-	pg "Done"
-
-	pnn "- Domain ($DOMAIN_NEXT) change status : "
-	pg "$SETTINGS_UPDATE_STATUS"
+	pnn "- Downloading logs ($DOMAIN_NEXT) : "
+        
+	download_domain_logs
 	
 	DOMAINS_COUNT=$((DOMAINS_COUNT + 1))
+
+	pg "Done"
 
 done
 

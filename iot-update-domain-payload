@@ -87,14 +87,6 @@ common_setup
 
 log "Common Setup OK"
 
-pnn "- Admin mode enabled : "
-ADMIN=$(admin)
-if [ "x$ADMIN" == "x1" ]; then
-	pg "Yes"
-else
-	pg "No"
-fi
-
 #----------------------------------------------------#
 # BODY                                               #
 #----------------------------------------------------#

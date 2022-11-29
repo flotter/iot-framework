@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-login-ec2.log
+LOG=$LOGS_DIR/iot-setup.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -57,15 +57,15 @@ done
 log "Started"
 
 pl
-pg "iot-logion-ec2 ($VERSION)"
+pg "iot-setup ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
         pl
 	pn "Usage:"
 	pl
-        pn "Login to AWS EC2 server."
+        pn "Setup the environment."
         pl
-	pn "iot-login-ec2 [-v] [-h] ..."
+	pn "iot-setup [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
@@ -83,7 +83,7 @@ pn
 pg ":: Setup & Checks ::"
 pn
 
-common_setup
+common_setup "setup"
 
 log "Common Setup OK"
 
@@ -91,4 +91,18 @@ log "Common Setup OK"
 # BODY                                               #
 #----------------------------------------------------#
 
-ssh -i $REPO_ROOT/security/ec2/iot-telemetry.pem ubuntu@ec2.iot-training.net
+pl
+pg ":: Certificate Installation ::"
+pl
+
+pn "Installing the security certificates..."
+pl
+
+mkdir -p /run/iot-framework/
+cat $REPO_ROOT/cloud/security/security.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d | tar xz -C /run/iot-framework/
+chmod -R 600 /run/iot-framework/security
+ln -snf /run/iot-framework/security $REPO_ROOT/security
+
+pl
+pn "Complete."
+pl
