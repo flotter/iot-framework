@@ -29,6 +29,7 @@ device_firmware() {
 	fi
 	
 	if [ ! -f $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz ] || [ "x$MD5" != "x$BUILD_MD5SUM" ]; then
+		rm -rf $IOT_DOWNLOAD_DIR/$DEVICE/$BUILD_IMAGE.img.xz
 		run wget -P $IOT_DOWNLOAD_DIR/$DEVICE $BUILD_URL
 		return_check "Image URL failed."
 	fi
