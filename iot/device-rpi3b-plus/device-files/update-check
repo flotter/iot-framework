@@ -195,7 +195,9 @@ while [ true ]; do
 				echo "reboots=$(cat $REBOOT_COUNT_FILE)" >> /run/heartbeat.cfg
 				echo "firmware-version=$(cat $FW_VER)" >> /run/heartbeat.cfg
 				echo "firmware-production=$(cat $FW_PROD)" >> /run/heartbeat.cfg
-				echo "firmware-date=$(cat $FW_DATE)" >> /run/heartbeat.cfg			
+				echo "firmware-date=$(cat $FW_DATE)" >> /run/heartbeat.cfg
+				IPV4=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+                                echo "ipv4=$IPV4" >> /run/heartbeat.cfg
 	
 				# Upload the heartbeat
 				s3cmd -q -f --config /run/commission/s3cfg-upload.cfg put --no-preserve /run/heartbeat.cfg s3://iot-device-upload/$(cat /run/commission/cust.cfg)/$(cat /run/commission/site.cfg)/$SERIAL-heartbeat-info.txt

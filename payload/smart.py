@@ -19,15 +19,14 @@ def payload_version():
     return sh.cat("/home/iot/payload/version.cfg").strip()
 
 
-#define callbacks
 def on_message(client, userdata, message):
-  print("received message =",str(message.payload.decode("utf-8")))
+  print("incoming: ",str(message.payload.decode("utf-8")))
 
 def on_log(client, userdata, level, buf):
   print("log: ",buf)
 
 def on_connect(client, userdata, flags, rc):
-  print("publishing ")
+  print("Connection attempt ...")
 
 
 client=paho.Client() 
