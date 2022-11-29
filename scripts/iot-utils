@@ -118,6 +118,8 @@ return_check() {
 #----------------------------------------------------#
 
 common_setup() {
+	# Bypass for certs
+	ARG=$1
 
 	pnn "- Running as user : "
         pg $USER
@@ -196,7 +198,7 @@ common_setup() {
 	gsettings set org.gnome.desktop.media-handling automount false > /dev/null 2>&1
 	pg "Done"
 
-	if [ "$0" = "setup" ]; then
+	if [ "$ARG" != "setup" ]; then
 		pnn "- Certificates  : "
 		if [ ! -e $REPO_ROOT/security ]; then
 			err "Please run the iot-setup script to install the certificates."
