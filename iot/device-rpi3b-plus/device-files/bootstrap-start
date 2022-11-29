@@ -14,6 +14,12 @@ ENC_NAME=enc
 ENC_PATH=/home/iot/$ENC_NAME
 ENC_PAYLOAD=/home/iot/payload
 
+# Wait for cloud init
+
+echo "Cloud Init Busy - Waiting before bootstrap ..."
+cloud-init status --wait
+echo "Cloud Init Complete - Bootstrap Next"
+
 # Generate a device specific secret key
 /bin/xkey
 
@@ -77,6 +83,11 @@ fi
 mkdir -p $ENC_PATH/live
 mkdir -p $ENC_PATH/update
 ln -snf $ENC_PATH/live $ENC_PAYLOAD
+
+# Let's make sure the iot user has access
+chown -R iot:iot /home/iot
+chown -R iot:iot /home/iot/live
+chown -R iot:iot /home/iot/update
 
 # During commissioning, unencrypted data is inserted
 # If we detect it, encrypt and remove unencrypted copy.

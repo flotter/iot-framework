@@ -150,23 +150,14 @@ if [ -f $BOOT_DIR/commission.tar.gz.enc ]; then
 	cat $BOOT_DIR/commission.tar.gz.enc | openssl enc -aes-256-cbc -pbkdf2 -d -k "$(cat $KEYFILE)" | tar xz -C /run
 fi
 
-# Flash green during update process (cloud sync)
-/bin/led-control led0 flash 10
-
 # Wait for cloud init
 
-while [ true ]; do
+echo "Cloud Init Busy - Waiting before update ..."
+cloud-init status --wait
+echo "Cloud Init Complete - Update Next"
 
-       STATUS=$(cloud-init status | cut -d ' ' -f 2)
-       if [ "x$STATUS" == "xdone" ]; then
-               echo "Cloud Init Complete - Update Next"
-               break
-       else
-               echo "Cloud Init Busy - Waiting before update ..."
-       fi
-
-       sleep 5
-done
+# Flash green during update process (cloud sync)
+/bin/led-control led0 flash 10
 
 # Wait up to 5mins
 WAIT_MAX=300

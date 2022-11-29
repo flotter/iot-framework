@@ -66,6 +66,10 @@ pgn() {
 
 log() {
 	mkdir -p $LOGS_DIR
+	if [ ! -f "$LOG" ]; then
+		touch "$LOG"
+		chmod 777 "$LOG"
+	fi
 	echo "[$(date) - $VERSION] $@" >> $LOG
 }
 
@@ -142,6 +146,10 @@ common_setup() {
 		fi
         	sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
                 echo "IOT_DEVICE=$IOT_DEVICE" >> $TOOL_SETTINGS
+	fi
+        if [ -v IOT_ENDPOINT ]; then
+        	sed -i '/IOT_ENDPOINT/d' $TOOL_SETTINGS
+                echo "IOT_ENDPOINT=$IOT_ENDPOINT" >> $TOOL_SETTINGS
 	fi
         if [ -v IOT_ADMIN ]; then
         	sed -i '/IOT_ADMIN/d' $TOOL_SETTINGS
@@ -286,6 +294,26 @@ update_payload_check() {
 	fi
 }
 
+download_domain_logs() {
+        mkdir -p $LOGS_DIR/$CUST/$SITE/
+	run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+	return_check "Logs download for domain $CUST/$SITE failed."
+}
+
+get_endpoints() {
+        mkdir -p $LOGS_DIR/$CUST/$SITE/
+        run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+        return_check "Logs download for domain $CUST/$SITE failed."
+	ENDPOINTS=($(ls $LOGS_DIR/$CUST/$SITE/*heartbeat-info.txt | xargs basename | cut -d'-' -f1))
+}
+
+get_endpoint_ip() {
+        mkdir -p $LOGS_DIR/$CUST/$SITE/
+        run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*${ENDPOINT}-heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+        return_check "Logs download for domain $CUST/$SITE endpoint ${ENDPOINT}-heartbeat-info.txt failed."
+	ENDPOINT_IP=$(cat $LOGS_DIR/$CUST/$SITE/${ENDPOINT}-heartbeat-info.txt | grep ipv4 | cut -d'=' -f2)
+}
+
 #----------------------------------------------------#
 # COMMON CHECKS                                      #
 #----------------------------------------------------#
@@ -329,6 +357,12 @@ device_check() {
 	fi
 	if [ ! -d "$IOT_DEVICE_DIR/$(device)" ]; then
 		err "Device does not exist. Please check the spelling."
+	fi
+}
+
+endpoint() {
+	if [ -f $TOOL_SETTINGS ]; then
+		cat $TOOL_SETTINGS | grep "^IOT_ENDPOINT=" | sed -n 's/[^=]*=\(.*\)/\1/p' | xargs || true
 	fi
 }
 
@@ -637,5 +671,48 @@ select_local_fw() {
 	
 	if [ -z "$FIRMWARE_LOCAL" ]; then
 		err "No valid locally built firmware found for device: $DEVICE"
+	fi
+}
+
+
+select_endpoint() {
+
+	log "Selecting endpoint"
+
+	get_endpoints
+
+	ENDPOINTS_MAX=${#ENDPOINTS[@]}
+	SELECT=$ENDPOINTS_MAX
+	ITER=0
+	
+	while [ $SELECT -lt 0 ] || [ $SELECT -ge $ENDPOINTS_MAX ]; do
+	
+	        if [ $ENDPOINTS_MAX -eq 0 ]; then
+	                break
+	        fi
+	
+	        if [ $ITER -ne 0 ]; then
+	                pl
+	                pr "Error: Your choice is invalid!"
+	                pl
+	        fi
+	
+	        pn "Please select your domain endpoint:"
+	        COUNT=0
+	        while [ $COUNT -lt $ENDPOINTS_MAX ]; do
+	                pn "[$(printf "%2d" $((COUNT + 1)))] ${ENDPOINTS[$COUNT]}"
+	                COUNT=$((COUNT + 1))
+	        done
+	
+	        pl
+	        pnn "Choice? : "
+	        read SELECT
+	        SELECT=$((SELECT - 1))
+	        ITER=$((ITER + 1))
+	done
+	ENDPOINT=${ENDPOINTS[$SELECT]}
+	
+	if [ -z "$ENDPOINT" ]; then
+		err "No valid endpoint found."
 	fi
 }

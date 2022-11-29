@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-firmware-build.log
+LOG=$LOGS_DIR/iot-domain-endpoint-show.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -23,9 +23,6 @@ ARGV=("$@")
 
 VERBOSE=false
 HELP=false
-DEBUG_SHELL=false
-PRODUCTION=false
-
 
 # Clear args
 set --
@@ -48,10 +45,6 @@ while [ $COUNT -lt $ARGC ]; do
 		VERBOSE=true
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
-	elif [ "x$STRIP" == "x-d" ]; then
-		DEBUG_SHELL=true
-	elif [ "x$STRIP" == "x-p" ]; then
-		PRODUCTION=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -64,23 +57,22 @@ done
 log "Started"
 
 pl
-pg "iot-firmware-build ($VERSION)"
+pg "iot-endpoint-default-show ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
+        pl
 	pn "Usage:"
 	pl
-	pn "Build a device specific firmware image."
-	pl
-	pn "iot-firmware-build [-v] [-h] ..."
+        pn "Show the default endpoint for debugging"
+        pl
+	pn "iot-endpoint-default-show [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
-	pn "-v (--verbose)      Verbose output for operations"
-	pn "-h (--help)         Print this"
-	pn "-d (--debug-shell)  Interactive shell"
-	pn "-p (--production)   Exclude various debug features from the image"
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
 	pl
-	exit 0
+	exit 1
 fi
 
 #----------------------------------------------------#
@@ -95,56 +87,29 @@ common_setup
 
 log "Common Setup OK"
 
-pnn "- Admin mode enabled : "
-ADMIN=$(admin)
-if [ "x$ADMIN" == "x1" ]; then
-	pg "Yes"
-else
-	pg "No"
-fi
-
 #----------------------------------------------------#
 # BODY                                               #
 #----------------------------------------------------#
 
 pl
-pg ":: Device Selection ::"
+pg ":: Show Default Endpoint ::"
 pl
 
-DEVICE=$(device)
-
-if [ -z "$DEVICE" ] || [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
-
-	if [ "x$ADMIN" == "x1" ]; then
-
-		select_device
-	else
-		err "No default device is set. Without Admin mode we cannot proceed."
-	fi
-else
-	# Default device (Non-admin mode compatible)
-	pnn "- Device selected : "
-	pg "$DEVICE"
-fi
-
-pl
-pg ":: Building Image ::"
+pn "An endpoint is a physical running board commissioned for a "
+pn "specific domain (customer/site). If we are on the same"
+pn "local network as the endpoint, we can debug the application"
+pn "on that board directly. If your endpoint is not in the list, it"
+pn "means that the device has not yet published a heartbeat"
+pn "record on Amazon S3. Make sure the device is powered, and"
+pn "the network configuration is valid."
 pl
 
-if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-firmware ]; then
-	err "Error: Cannot locate firmware script for device: $DEVICE"
-fi
+pn "The following Endpoint is set as the default:"
 
-source $IOT_DEVICE_DIR/$DEVICE/device-firmware
-
-device_firmware
-
-# Complete, move to real name
-mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
-mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+ENDPOINT=$(endpoint)
 
 pl
-pnn "Device Firmware Ready : "
-pg "$(basename $FIRMWARE_NAME_FINAL)"
-pl
+pnn "Endpoint : "
+pg $ENDPOINT
 
+pl

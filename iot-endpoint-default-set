@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-firmware-build.log
+LOG=$LOGS_DIR/iot-endpoint-default-set.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -23,9 +23,6 @@ ARGV=("$@")
 
 VERBOSE=false
 HELP=false
-DEBUG_SHELL=false
-PRODUCTION=false
-
 
 # Clear args
 set --
@@ -48,10 +45,6 @@ while [ $COUNT -lt $ARGC ]; do
 		VERBOSE=true
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
-	elif [ "x$STRIP" == "x-d" ]; then
-		DEBUG_SHELL=true
-	elif [ "x$STRIP" == "x-p" ]; then
-		PRODUCTION=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -64,23 +57,22 @@ done
 log "Started"
 
 pl
-pg "iot-firmware-build ($VERSION)"
+pg "iot-endpoint-default-set ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
+        pl
 	pn "Usage:"
 	pl
-	pn "Build a device specific firmware image."
-	pl
-	pn "iot-firmware-build [-v] [-h] ..."
+        pn "Set the default endpoint for debugging."
+        pl
+	pn "iot-endpoint-default-set [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
-	pn "-v (--verbose)      Verbose output for operations"
-	pn "-h (--help)         Print this"
-	pn "-d (--debug-shell)  Interactive shell"
-	pn "-p (--production)   Exclude various debug features from the image"
+	pn "-v (--verbose)     Verbose output for operations"
+	pn "-h (--help)        Print this"
 	pl
-	exit 0
+	exit 1
 fi
 
 #----------------------------------------------------#
@@ -94,14 +86,6 @@ pn
 common_setup
 
 log "Common Setup OK"
-
-pnn "- Admin mode enabled : "
-ADMIN=$(admin)
-if [ "x$ADMIN" == "x1" ]; then
-	pg "Yes"
-else
-	pg "No"
-fi
 
 #----------------------------------------------------#
 # BODY                                               #
@@ -128,23 +112,76 @@ else
 fi
 
 pl
-pg ":: Building Image ::"
+pg ":: Domain Selection ::"
 pl
 
-if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-firmware ]; then
-	err "Error: Cannot locate firmware script for device: $DEVICE"
+DOMAIN=$(domain)
+
+if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		select_domain
+	else
+		err "No default domain is set. Without Admin mode we cannot proceed."
+	fi
+else
+	# Single Default domain (Non-admin mode compatible)
+
+        CUST=$(dirname $DOMAIN)
+        SITE=$(basename $DOMAIN)
 fi
 
-source $IOT_DEVICE_DIR/$DEVICE/device-firmware
-
-device_firmware
-
-# Complete, move to real name
-mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
-mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+pnn "- Domain selected : "
+pg "$CUST/$SITE"
 
 pl
-pnn "Device Firmware Ready : "
-pg "$(basename $FIRMWARE_NAME_FINAL)"
+pg ":: Set Default Endpoint ::"
 pl
 
+pn "An endpoint is a physical running board commissioned for a "
+pn "specific domain (customer/site). If we are on the same"
+pn "local network as the endpoint, we can debug the application"
+pn "on that board directly. If your endpoint is not in the list, it"
+pn "means that the device has not yet published a heartbeat"
+pn "record on Amazon S3. Make sure the device is powered, and"
+pn "the network configuration is valid."
+pl
+
+select_endpoint
+
+pl
+pg ":: Final Confirmation ::"
+pl
+
+pn "Set the following endpoint as the default:"
+
+pl
+pnn "Endpoint : "
+pg "$ENDPOINT"
+pl
+pnn "Type 'ok' and Enter to continue : "
+read SELECT
+
+if [ "x$SELECT" != "xok" ]; then
+	err "User aborted."
+fi
+
+pl
+pg ":: Performing Actions ::"
+pl
+
+pnn "- Setting default endpoint : "
+sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
+echo "IOT_DEVICE=$DEVICE" >> $TOOL_SETTINGS
+sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
+echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
+sed -i '/IOT_ENDPOINT/d' $TOOL_SETTINGS
+echo "IOT_ENDPOINT=$ENDPOINT" >> $TOOL_SETTINGS
+pg "Done"
+
+log "Default device set to $DEVICE"
+log "Default domain set to $CUST/$SITE"
+log "Default endpoint set to $ENDPOINT"
+
+pl

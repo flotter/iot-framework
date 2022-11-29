@@ -75,7 +75,7 @@ if [ "$HELP" == "true" ]; then
 	pn "-h (--help)         Print this"
 	pn "-d (--debug-shell)  Interactive shell"
 	pl
-	exitbuild
+	exit 0
 fi
 
 #----------------------------------------------------#

@@ -93,6 +93,26 @@ log "Common Setup OK"
 #----------------------------------------------------#
 
 pl
+pg ":: Device Selection ::"
+pl
+
+DEVICE=$(device)
+
+if [ -z "$DEVICE" ] || [ ! -d $IOT_DEVICE_DIR/$DEVICE ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		select_device
+	else
+		err "No default device is set. Without Admin mode we cannot proceed."
+	fi
+else
+	# Default device (Non-admin mode compatible)
+	pnn "- Device selected : "
+	pg "$DEVICE"
+fi
+
+pl
 pg ":: Set Default Domain ::"
 pl
 
@@ -129,6 +149,8 @@ pg ":: Performing Actions ::"
 pl
 
 pnn "- Setting default domain : "
+sed -i '/IOT_DEVICE/d' $TOOL_SETTINGS
+echo "IOT_DEVICE=$DEVICE" >> $TOOL_SETTINGS
 sed -i '/IOT_DOMAIN/d' $TOOL_SETTINGS
 echo "IOT_DOMAIN=$CUST/$SITE" >> $TOOL_SETTINGS
 pg "Done"

@@ -12,7 +12,7 @@ source $CPWD/scripts/iot-utils
 # DEFINES / MACROS                                   #
 #----------------------------------------------------#
 
-LOG=$LOGS_DIR/iot-firmware-build.log
+LOG=$LOGS_DIR/iot-firmware-debug.log
 
 #----------------------------------------------------#
 # CMDLINE OPTIONS                                    #
@@ -24,8 +24,7 @@ ARGV=("$@")
 VERBOSE=false
 HELP=false
 DEBUG_SHELL=false
-PRODUCTION=false
-
+IP=
 
 # Clear args
 set --
@@ -46,12 +45,19 @@ while [ $COUNT -lt $ARGC ]; do
 
 	if [ "x$STRIP" == "x-v" ]; then
 		VERBOSE=true
+	elif [ "x$STRIP" == "x-i" ]; then
+		COUNT=$((COUNT+1))
+		IP=${ARGV[COUNT]}
+		if [ "x$IP" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
 	elif [ "x$STRIP" == "x-d" ]; then
 		DEBUG_SHELL=true
-	elif [ "x$STRIP" == "x-p" ]; then
-		PRODUCTION=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -64,21 +70,21 @@ done
 log "Started"
 
 pl
-pg "iot-firmware-build ($VERSION)"
+pg "iot-firmware-debug ($VERSION)"
 
 if [ "$HELP" == "true" ]; then
 	pn "Usage:"
 	pl
-	pn "Build a device specific firmware image."
+	pn "Debug payload on domain specific device."
 	pl
-	pn "iot-firmware-build [-v] [-h] ..."
+	pn "iot-firmware-debug [-v] [-h] ..."
 	pl
 	pn "Help:"
 	pl
 	pn "-v (--verbose)      Verbose output for operations"
+	pn "-i (--ip)           Manually supply endpoint IP"
 	pn "-h (--help)         Print this"
 	pn "-d (--debug-shell)  Interactive shell"
-	pn "-p (--production)   Exclude various debug features from the image"
 	pl
 	exit 0
 fi
@@ -127,24 +133,69 @@ else
 	pg "$DEVICE"
 fi
 
+
 pl
-pg ":: Building Image ::"
+pg ":: Domain Selection ::"
 pl
 
-if [ ! -f $IOT_DEVICE_DIR/$DEVICE/device-firmware ]; then
-	err "Error: Cannot locate firmware script for device: $DEVICE"
+DOMAIN=$(domain)
+
+if [ -z "$DOMAIN" ] || [ ! -d $MASTER_DB/$DOMAIN ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		select_domain
+	else
+		err "No default domain is set. Without Admin mode we cannot proceed."
+	fi
+else
+	# Single Default domain (Non-admin mode compatible)
+
+        CUST=$(dirname $DOMAIN)
+        SITE=$(basename $DOMAIN)
 fi
 
-source $IOT_DEVICE_DIR/$DEVICE/device-firmware
-
-device_firmware
-
-# Complete, move to real name
-mkdir -p $(dirname $FIRMWARE_NAME_FINAL)
-mv $FIRMWARE_NAME $FIRMWARE_NAME_FINAL
+pnn "- Domain selected : "
+pg "$CUST/$SITE"
 
 pl
-pnn "Device Firmware Ready : "
-pg "$(basename $FIRMWARE_NAME_FINAL)"
+pg ":: Endpoint Selection ::"
 pl
 
+ENDPOINT=$(endpoint)
+
+if [ -z "$ENDPOINT" ]; then
+
+	if [ "x$ADMIN" == "x1" ]; then
+
+		select_endpoint
+	else
+		err "No default endpoint is set. Without Admin mode we cannot proceed."
+	fi
+fi
+
+pnn "- Endpoint selected : "
+if [ ! -z "$IP" ]; then
+	pg "Manual IP"
+else
+	pg "$ENDPOINT"
+fi
+
+pl
+pg ":: Debug Prepare ::"
+pl
+
+if [ ! -z "$IP" ]; then
+	pnn "- Manual Endpoint IP : "
+	ENDPOINT_IP=$IP
+	pg "$ENDPOINT_IP"
+else
+	pnn "- Last Endpoint IP : "
+	get_endpoint_ip
+	pg "$ENDPOINT_IP"
+fi
+
+pnn "- Endpoint Ping : "
+run ping -c1 $ENDPOINT_IP
+return_check "Failed to ping endpoint IP $ENDPOINT_IP"
+pg "OK"
