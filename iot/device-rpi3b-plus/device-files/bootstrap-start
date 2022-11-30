@@ -86,8 +86,7 @@ ln -snf $ENC_PATH/live $ENC_PAYLOAD
 
 # Let's make sure the iot user has access
 chown -R iot:iot /home/iot
-chown -R iot:iot /home/iot/live
-chown -R iot:iot /home/iot/update
+chown -R iot:iot $ENC_PATH
 
 # During commissioning, unencrypted data is inserted
 # If we detect it, encrypt and remove unencrypted copy.
