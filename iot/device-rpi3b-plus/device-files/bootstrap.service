@@ -1,7 +1,6 @@
 [Unit]
 Description="Bootstrap process"
 After=boot-firmware.mount
-Before=home-iot-enc.mount
 
 [Service]
 Type=oneshot
@@ -13,4 +12,4 @@ ExecStop=/bin/bootstrap-end
 StandardOutput=journal
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
