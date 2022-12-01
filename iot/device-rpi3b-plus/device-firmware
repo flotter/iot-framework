@@ -137,6 +137,7 @@ device_firmware() {
 	echo "DATE=$DATE" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
 	echo "DEBUG_SHELL=$DEBUG_SHELL" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
 	echo "VERBOSE=$VERBOSE" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
+	echo "FIRMWARE_USER=$FIRMWARE_USER" >> $IOT_BUILD_DIR/$DEVICE/mnt/root/home/$FIRMWARE_USER/device-input
 	
 	pg "Done"
 	

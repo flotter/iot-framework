@@ -105,6 +105,15 @@ echo "$PRODUCTION" > $CPWD/firmware-production.cfg
 echo "$DATE" > $CPWD/firmware-date.cfg
 py "Done"
 
+
+pnn "- Firmware user tweaks : "
+mkdir -p /home/$FIRMWARE_USER
+touch /home/$FIRMWARE_USER/.hushlogin
+sed -i 's/ENABLED=./ENABLED=0/g' /etc/default/motd-news
+run cp $CPWD/device-files/.profile /home/$FIRMWARE_USER/
+run cp $CPWD/device-files/banner /home/$FIRMWARE_USER/
+py "Done"
+
 pnn "- Enable Fsck on every boot : "
 echo "$(cat $CONFIG_CMD) fsck.mode=force fsck.repair=yes" > $CONFIG_CMD
 py "Done"

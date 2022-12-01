@@ -191,3 +191,42 @@ pnn "- Endpoint Ping : "
 run ping -c1 $ENDPOINT_IP
 return_check "Failed to ping endpoint IP $ENDPOINT_IP"
 pg "OK"
+
+pl
+pg ":: Login ::"
+pl
+
+USER=iot
+SSHPASS=training
+
+export SSHPASS=$SSHPASS
+
+pnn "- SSH Connection Test : "
+run sshpass -e ssh -q -o ConnectTimeout=5 -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP exit
+return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+pg "Pass"
+
+pnn "- Endpoint Match : "
+SERIAL_VERIFY=$(sshpass -e ssh -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP cat /proc/cpuinfo | grep Serial | cut -d':' -f2 | xargs)
+
+if [ "$ENDPOINT" != "$SERIAL_VERIFY" ]; then
+	pr "The endpoint we are correcting to has a different endpoint serial ($SERIAL_VERIFY)."
+	pl
+	exit 1
+fi
+pg "Yes"
+pl
+
+pl
+pg ":: Debug ::"
+pl
+
+if [ "$DEBUG_SHELL" = "false" ]; then
+	# Payload
+	echo debug
+else
+	# Shell
+	set +e
+	sshpass -e ssh -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP
+	set -e
+fi
