@@ -4,3 +4,4 @@ build/*
 download/*
 iot/device-rpi3b-plus/device-files/xkey
 security
+logs
