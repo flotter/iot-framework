@@ -314,23 +314,30 @@ update_payload_check() {
 }
 
 download_domain_logs() {
-        mkdir -p $LOGS_DIR/$CUST/$SITE/
+	mkdir -p $LOGS_DIR/$CUST/$SITE/
 	run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
 	return_check "Logs download for domain $CUST/$SITE failed."
 }
 
 get_endpoints() {
-        mkdir -p $LOGS_DIR/$CUST/$SITE/
-        run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
-        return_check "Logs download for domain $CUST/$SITE failed."
+	mkdir -p $LOGS_DIR/$CUST/$SITE/
+	run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+	return_check "Logs download for domain $CUST/$SITE failed."
 	ENDPOINTS=($(ls $LOGS_DIR/$CUST/$SITE/*heartbeat-info.txt | xargs basename | cut -d'-' -f1))
 }
 
 get_endpoint_ip() {
-        mkdir -p $LOGS_DIR/$CUST/$SITE/
-        run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*${ENDPOINT}-heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
-        return_check "Logs download for domain $CUST/$SITE endpoint ${ENDPOINT}-heartbeat-info.txt failed."
+	mkdir -p $LOGS_DIR/$CUST/$SITE/
+	run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*${ENDPOINT}-heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+	return_check "Logs download for domain $CUST/$SITE endpoint ${ENDPOINT}-heartbeat-info.txt failed."
 	ENDPOINT_IP=$(cat $LOGS_DIR/$CUST/$SITE/${ENDPOINT}-heartbeat-info.txt | grep ipv4 | cut -d'=' -f2)
+}
+
+get_endpoint_ts() {
+	mkdir -p $LOGS_DIR/$CUST/$SITE/
+	run s3cmd -v --config $S3_ALL sync --no-preserve --exclude=* --include=*${ENDPOINT}-heartbeat-info.txt $S3_DEVICE_UL/$CUST/$SITE/ $LOGS_DIR/$CUST/$SITE/
+	return_check "Logs download for domain $CUST/$SITE endpoint ${ENDPOINT}-heartbeat-info.txt failed."
+	ENDPOINT_TS=$(cat $LOGS_DIR/$CUST/$SITE/${ENDPOINT}-heartbeat-info.txt | grep timestamp | cut -d'=' -f2)
 }
 
 #----------------------------------------------------#

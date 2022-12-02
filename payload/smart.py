@@ -28,7 +28,6 @@ def on_log(client, userdata, level, buf):
 def on_connect(client, userdata, flags, rc):
   print("Connection attempt ...")
 
-
 client=paho.Client() 
 client.on_message=on_message
 client.on_log=on_log

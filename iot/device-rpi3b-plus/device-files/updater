@@ -214,6 +214,9 @@ else
 			upload_file "/run/$BOOT_LOGS.tar.gz"
 
 			update_log_publish "Early boot logs published."
+
+			# Cleanup
+			rm -rf /run/$BOOT_LOGS.tar.gz $BOOT_PATH
 	
 			# Capture logs
 			DEBUG_LOGS=$SERIAL-debug
@@ -236,6 +239,9 @@ else
 			upload_file "/run/$DEBUG_LOGS.tar.gz"
 
 			update_log_publish "Debug logs published."
+
+			# Cleanup
+			rm -rf /run/$DEBUG_LOGS.tar.gz $DEBUG_PATH
 
 		else
 			update_log_publish "Debug logs disabled, not uploading."

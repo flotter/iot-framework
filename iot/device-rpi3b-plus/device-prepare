@@ -126,6 +126,14 @@ pnn "- Disable Auto Resize on boot : "
 run rm -rf /etc/init.d/resize2fs_once
 py "Done"
 
+pnn "- Journal Log Space to 25M : "
+sed -i 's/.*RuntimeMaxUse=.*/RuntimeMaxUse=25M/g' /etc/systemd/journald.conf
+py "Done"
+
+pnn "- Syslog Space to 1M : "
+cp -f $CPWD/device-files/rsyslog /etc/logrotate.d/rsyslog
+py "Done"
+
 pnn "- Changing Locale : "
 export LANG="en_US.UTF-8"
 export LANGUAGE="en_US:en"
@@ -136,12 +144,6 @@ py "Done"
 
 pnn "- Install cloud-init user config : "
 run cp -f $CPWD/device-files/user-data /boot/firmware
-py "Done"
-
-pnn "- Disable Apt cache : "
-mkdir -p /etc/apt/apt.conf.d
-cp $CPWD/device-files/99noaptcache /etc/apt/apt.conf.d/
-rm -rf /var/cache/apt/archives
 py "Done"
 
 pnn "- Update System : "
@@ -210,6 +212,10 @@ py "Done"
 
 pnn "- Refresh shared libraries : "
 run ldconfig
+py "Done"
+
+pnn "- Clean Apt cache : "
+apt-get clean
 py "Done"
 
 if [ "x$DEBUG_SHELL" == "xtrue" ]; then

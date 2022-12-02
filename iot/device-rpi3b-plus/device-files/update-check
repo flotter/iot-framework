@@ -185,7 +185,8 @@ while [ true ]; do
 				# Clear heartbeat file
 				cat /dev/null > /run/heartbeat.cfg
 	
-				echo "timestamp=$(date --utc)" >> /run/heartbeat.cfg
+				echo "date=$(date --utc)" >> /run/heartbeat.cfg
+				echo "timestamp=$(date --utc +%s)" >> /run/heartbeat.cfg
 				echo "settings-online-version=$(/bin/online-settings-version)" >> /run/heartbeat.cfg
 				echo "settings-offline-version=$(/bin/offline-settings-version)" >> /run/heartbeat.cfg
 				echo "payload-online-version=$(/bin/online-payload-version)" >> /run/heartbeat.cfg

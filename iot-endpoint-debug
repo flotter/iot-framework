@@ -187,14 +187,19 @@ else
 	pg "$ENDPOINT_IP"
 fi
 
+pnn "- Endpoint Last Seen : "
+get_endpoint_ts
+NOW=$(date --utc +%s)
+DELTA=$((NOW - ENDPOINT_TS))
+HOURS=$((DELTA / 3600))
+MINS=$(((DELTA - (HOURS * 3600)) / 60))
+SECS=$((DELTA - (HOURS * 3600) - (MINS * 60)))
+pg "${HOURS}h-${MINS}m-${SECS}s ago"
+
 pnn "- Endpoint Ping : "
 run ping -c1 $ENDPOINT_IP
 return_check "Failed to ping endpoint IP $ENDPOINT_IP"
 pg "OK"
-
-pl
-pg ":: Login ::"
-pl
 
 USER=iot
 SSHPASS=training
@@ -215,18 +220,59 @@ if [ "$ENDPOINT" != "$SERIAL_VERIFY" ]; then
 	exit 1
 fi
 pg "Yes"
-pl
 
-pl
-pg ":: Debug ::"
-pl
 
 if [ "$DEBUG_SHELL" = "false" ]; then
-	# Payload
-	echo debug
-else
-	# Shell
+	
+	pnn "- Payload service stop : "
+	run sshpass -e ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'sudo systemctl stop payload || true'
+	return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	pg "Done"
+
+
+	pnn "- Injecting latest payload : "
+	run sshpass -e ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'sudo mkdir -p /run/x-payload; sudo chmod 777 /run/x-payload || true'
+        return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	run sshpass -e scp -r -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $REPO_ROOT/payload/* $USER@$ENDPOINT_IP:/run/x-payload/
+        return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	pg "Done"
+
 	set +e
-	sshpass -e ssh -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP
+	pl
+	pg "Running: payload/payload-start"
+	pl
+	pg "Press CTRL-C to exit ..."
+	pl
+	# Run payload
+        sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /run/x-payload; sudo bash ./payload-start; echo; echo "Crash or exit detected, falling to terminal..."; echo; echo "Run \"exit\" to stop the debug session"; echo; bash'
+	
+	pl
+	pg "Running: payload/payload-stop"
+	pl
+	pg "Press CTRL-C to exit ..."
+	pl
+	# Run payload
+        sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /run/x-payload; sudo bash ./payload-stop'
 	set -e
+
+	pl	
+	
+	pnn "- Removing injected payload : "
+	run sshpass -e ssh -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'sudo rm -rf /run/x-payload || true'
+        return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	pg "Done"
+	
+	pnn "- Payload service restarted : "	
+	run sshpass -e ssh -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'sudo systemctl start payload || true'
+	return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	pg "Done"
+
+else
+	pl
+	pg ":: Endpoint ::"
+
+	# Shell
+	run sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; bash'
+	return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
 fi
+pl
