@@ -231,7 +231,10 @@ else
 			journalctl -u payload-hw-check --since "7 days ago" > $DEBUG_PATH/payload-hw-check.txt
 			journalctl -u netplan-wpa-wlan0 --since "7 days ago" > $DEBUG_PATH/netplan-wifi.txt
 			journalctl -u systemd-networkd --since "7 days ago" > $DEBUG_PATH/systemd-networkd.txt
+			journalctl -u watchdog --since "7 days ago" > $DEBUG_PATH/watchdog.txt
+
 			cp -f /etc/netplan/config.yaml $DEBUG_PATH/networking.cfg
+
 			journalctl -a --since "7 days ago" > $DEBUG_PATH/all.txt
 
 			tar -czf /run/$DEBUG_LOGS.tar.gz -C /run/ $DEBUG_LOGS

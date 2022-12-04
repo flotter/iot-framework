@@ -70,7 +70,10 @@ if [ "x$PRODUCTION" == "xtrue" ]; then
 	echo "### RPI3B ###" > $CONFIG_USR
 	echo "" >> $CONFIG_USR
 	echo "dtoverlay=disable-bt" >> $CONFIG_USR
+	echo "dtparam=watchdog=on" >> $CONFIG_USR
 
+	pnn "- Hardware Watchdog : "
+	py "Enabled"
 	pnn "- Disabling Bluetooth : "
 	py "Done"
 	pnn "- Disabling UARTs : "
@@ -89,7 +92,10 @@ else
 	echo "### RPI3B ###" > $CONFIG_USR
 	echo "" >> $CONFIG_USR 
 	echo "dtoverlay=disable-bt" >> $CONFIG_USR
+	echo "dtparam=watchdog=on" >> $CONFIG_USR
 	
+	pnn "- Hardware Watchdog : "
+	py "Enabled"
 	pnn "- Disabling Bluetooth : "
 	py "Done"
 	pnn "- Enabling UARTs : "
@@ -128,6 +134,7 @@ py "Done"
 
 pnn "- Journal Log Space to 25M : "
 sed -i 's/.*RuntimeMaxUse=.*/RuntimeMaxUse=25M/g' /etc/systemd/journald.conf
+sed -i 's/.*SystemMaxUse=.*/SystemMaxUse=25M/g' /etc/systemd/journald.conf
 py "Done"
 
 pnn "- Syslog Space to 1M : "
@@ -154,7 +161,7 @@ run apt remove -y unattended-upgrades
 py "Done"
 
 pnn "- Installing components : "
-run apt-get install -y build-essential vim nano cryptsetup python3-distutils iw wget fake-hwclock ntpdate libraspberrypi-bin wireless-tools
+run apt-get install -y build-essential vim nano cryptsetup python3-distutils iw wget fake-hwclock ntpdate libraspberrypi-bin wireless-tools watchdog
 run apt-get install -y python3-pip
 run python3 -m pip install --upgrade pip
 run python3 -m pip install s3cmd
@@ -168,6 +175,13 @@ py "Done"
 
 pnn "- Disable Snapd : "
 run apt-get purge -y snapd
+py "Done"
+
+pnn "- Modifying watchdog service : "
+run systemctl disable watchdog
+run cp -f $CPWD/device-files/watchdog.conf /etc/watchdog.conf
+run cp -f $CPWD/device-files/watchdog.service /lib/systemd/system/watchdog.service
+run systemctl enable watchdog
 py "Done"
 
 pnn "- Compiling and installing xkey : "
