@@ -1,23 +1,15 @@
+# Smart Home controller
+#
+
+# Python imports
 import time
 import paho.mqtt.client as paho
 import ssl
 import json
-import sh
 import random
 
-def cust():
-    return sh.cat("/run/payload-runtime/cust.cfg").strip()
-def site():
-    return sh.cat("/run/payload-runtime/site.cfg").strip()
-def serial():
-    return sh.cat("/run/payload-runtime/serial.cfg").strip()
-def reboots():
-    return sh.cat("/home/iot/firmware-reboots.cfg").strip()
-def settings_version():
-    return sh.cat("/run/settings/version.cfg").strip()
-def payload_version():
-    return sh.cat("/home/iot/payload/version.cfg").strip()
-
+# Payload imports
+from libs import utils
 
 def on_message(client, userdata, message):
   print("incoming: ",str(message.payload.decode("utf-8")))
@@ -55,12 +47,12 @@ print("Hello!")
 
 while True:
     client.publish(
-        f"iot/{cust()}/{site()}/{serial()}/health",
+        f"iot/{utils.cust()}/{utils.site()}/{utils.serial()}/health",
         json.dumps(
             {
-                "settings_version" : int(settings_version()),
-                "payload_version" : int(payload_version()),
-                "reboots" : int(reboots()),
+                "settings_version" : int(utils.settings_version()),
+                "payload_version" : int(utils.payload_version()),
+                "reboots" : int(utils.reboots()),
             }
         )
     )
@@ -76,7 +68,7 @@ while True:
         if v["state"] != v["prev"]:
             v["prev"] = v["state"]
             client.publish(
-                f"iot/{cust()}/{site()}/{serial()}/{i+1}",
+                f"iot/{utils.cust()}/{utils.site()}/{utils.serial()}/{i+1}",
                 json.dumps(
                     {
                         "state" : v["state"]

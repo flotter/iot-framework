@@ -116,7 +116,7 @@ update_settings() {
 		echo "Settings sync failed."
 	else
 		# Delete empty directories if files were removed
-		find $ENC_DRIVE/update -type d -empty -delete
+		find $BOOT_DIR/settings -type d -empty -delete
 		sync
 
 		DEVICE_VER=$(cat /run/settings/version.cfg)
