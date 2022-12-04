@@ -167,6 +167,7 @@ run python3 -m pip install --upgrade pip
 run python3 -m pip install s3cmd
 run python3 -m pip install paho-mqtt
 run python3 -m pip install sh
+run python3 -m pip install Rpi.GPIO
 py "Done"
 
 pnn "- Creating /tmp : "

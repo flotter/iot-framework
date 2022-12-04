@@ -3,34 +3,69 @@
 
 # Python imports
 import time
-import paho.mqtt.client as paho
-import ssl
 import json
 import random
+
+# MQTT
+import paho.mqtt.client as paho
+
+# GPIO
+import RPi.GPIO as GPIO
 
 # Payload imports
 from libs import utils
 
-def on_message(client, userdata, message):
-  print("incoming: ",str(message.payload.decode("utf-8")))
+#################################################
+# MQTT Support
+#################################################
 
 def on_log(client, userdata, level, buf):
-  print("log: ",buf)
+    """Print debug information."""
+
+    print("MQTT Debug Log: ",buf)
 
 def on_connect(client, userdata, flags, rc):
-  print("Connection attempt ...")
+    """Subscribe to messages intended for this endpoint only."""
 
-client=paho.Client() 
-client.on_message=on_message
-client.on_log=on_log
-client.on_connect=on_connect
-print("connecting to broker")
-client.tls_set("mqtt.crt")
-client.tls_insecure_set(True)
-client.connect("mqtt.iot-training.net", 8883, 60)
+    print("MQTT Connected with result code " + str(rc))
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe(f"cmd/{utils.cust()}/{utils.site()}/{utils.serial()}/+")
 
-##start loop to process received messages
-client.loop_start()
+def on_message(client, userdata, message):
+    """Print incoming MQTT message."""
+
+    print("MQTT Incoming:")
+    print(str(message.topic.decode("utf-8")))
+    print(str(message.payload.decode("utf-8")))
+
+def mqtt_start():
+    """Start the MQTT connection and listener."""
+
+    client=paho.Client() 
+    client.on_message=on_message
+    client.on_log=on_log
+    client.on_connect=on_connect
+    client.tls_set("mqtt.crt")
+    client.tls_insecure_set(True)
+    client.connect("mqtt.iot-training.net", 8883, 60)
+
+    # Start the MQTT event handler
+    client.loop_start()
+
+    return client
+
+#################################################
+# GPIO Support
+#################################################
+
+
+
+#################################################
+# Application Logic
+#################################################
+
+mqtt = mqtt_start()
 
 channels = [
      {
@@ -46,7 +81,7 @@ channels = [
 print("Hello!")
 
 while True:
-    client.publish(
+    mqtt.publish(
         f"iot/{utils.cust()}/{utils.site()}/{utils.serial()}/health",
         json.dumps(
             {
@@ -67,7 +102,7 @@ while True:
 
         if v["state"] != v["prev"]:
             v["prev"] = v["state"]
-            client.publish(
+            mqtt.publish(
                 f"iot/{utils.cust()}/{utils.site()}/{utils.serial()}/{i+1}",
                 json.dumps(
                     {
