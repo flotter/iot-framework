@@ -271,8 +271,14 @@ else
 	pl
 	pg ":: Endpoint ::"
 
+	pl
+	pg "Starting terminal ..."
+	pl
+	pg "Run \"exit\" to return."
+	pl
 	# Shell
-	run sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; bash'
-	return_check "Failed to connect to endpoint $ENDPOINT on IP $ENDPOINT_IP"
+	set +e
+	sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; bash'
+	set -e
 fi
 pl
