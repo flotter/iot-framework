@@ -79,7 +79,7 @@ update_payload() {
 
 			echo "Updating payload (no reboot required) ..."
 
-			rsync -av --delete $ENC_DRIVE/update/ $ENC_DRIVE/live/
+			rsync -acv --delete $ENC_DRIVE/update/ $ENC_DRIVE/live/
 			sync
 		
 			# Delete empty directories if files were removed
