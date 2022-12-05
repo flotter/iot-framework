@@ -23,7 +23,8 @@ ARGV=("$@")
 
 VERBOSE=false
 HELP=false
-DEBUG_SHELL=false
+IDEBUG=false
+ISHELL=false
 IP=
 
 # Clear args
@@ -57,7 +58,9 @@ while [ $COUNT -lt $ARGC ]; do
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
 	elif [ "x$STRIP" == "x-d" ]; then
-		DEBUG_SHELL=true
+		IDEBUG=true
+	elif [ "x$STRIP" == "x-s" ]; then
+		ISHELL=true
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -84,7 +87,8 @@ if [ "$HELP" == "true" ]; then
 	pn "-v (--verbose)      Verbose output for operations"
 	pn "-i (--ip)           Manually supply endpoint IP"
 	pn "-h (--help)         Print this"
-	pn "-d (--debug-shell)  Interactive shell"
+	pn "-d (--debug)        Interactive shell after payload run"
+	pn "-s (--shell)        Interactive shell only"
 	pl
 	exit 0
 fi
@@ -222,7 +226,7 @@ fi
 pg "Yes"
 
 
-if [ "$DEBUG_SHELL" = "false" ]; then
+if [ "$ISHELL" = "false" ]; then
 	
 	pnn "- Payload service stop : "
 	run sshpass -e ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'sudo systemctl stop payload || true'
@@ -245,7 +249,20 @@ if [ "$DEBUG_SHELL" = "false" ]; then
 	pl
 	# Run payload
         sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /run/x-payload; sudo bash ./payload-start; echo; echo "Crash or exit detected, falling to terminal..."; echo; echo "Run \"exit\" to stop the debug session"; echo; bash'
-	
+
+	if [ "$IDEBUG" = "true" ]; then
+		pl
+		pg "Starting terminal ..."
+		pl
+		pg "Run \"exit\" to return."
+		pl
+
+		# Shell
+		set +e
+		sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /run/x-payload; sudo bash'
+		set -e
+	fi
+
 	pl
 	pg "Running: payload/payload-stop"
 	pl
@@ -278,7 +295,7 @@ else
 	pl
 	# Shell
 	set +e
-	sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; bash'
+	sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; sudo bash'
 	set -e
 fi
 pl

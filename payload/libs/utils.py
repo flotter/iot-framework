@@ -63,3 +63,9 @@ def payload_version():
     return sh.cat("/home/iot/payload/version.cfg").strip()
 
 
+def bcm_temp():
+    """Returns the Broadcom chip temprature.
+
+    :returns: Temperature as string.
+    """
+    return sh.cut(sh.vcgencmd("measure_temp"), '-d=','-f2').strip()
