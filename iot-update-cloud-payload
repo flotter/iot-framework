@@ -21,6 +21,7 @@ LOG=$LOGS_DIR/iot-update-cloud-payload.log
 ARGC=$#
 ARGV=("$@")
 
+KEEP_VERSION=
 VERBOSE=false
 HELP=false
 
@@ -43,6 +44,8 @@ while [ $COUNT -lt $ARGC ]; do
 
 	if [ "x$STRIP" == "x-v" ]; then
 		VERBOSE=true
+	elif [ "x$STRIP" == "x-k" ]; then
+		KEEP_VERSION=1
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
 	else
@@ -69,6 +72,7 @@ if [ "$HELP" == "true" ]; then
 	pl
 	pn "Help:"
 	pl
+	pn "-k (--keep)        Keep the version (do not increment)"
 	pn "-v (--verbose)     Verbose output for operations"
 	pn "-h (--help)        Print this"
 	pl

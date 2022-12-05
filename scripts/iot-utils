@@ -267,13 +267,18 @@ update_settings_check() {
 
 	if [ "x$S1" != "x0" ] || [ "x$S2" != "x0" ] || [ "x$S3" != "x0" ]; then
 		
-	        NVER=$((OVER + 1))
-	        echo $NVER > $MASTER_DB/$CUST/$SITE/settings/version.cfg
-	        
-		run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/
-		return_check "Settings version update for domain $CUST/$SITE failed."
+		if [ ! -z "$KEEP_VERSION" ]; then
 
-		SETTINGS_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
+			SETTINGS_UPDATE_STATUS="Updated (v$OVER)"
+		else
+		        NVER=$((OVER + 1))
+		        echo $NVER > $MASTER_DB/$CUST/$SITE/settings/version.cfg
+		        
+			run s3cmd -v --config $S3_ALL sync --no-preserve $MASTER_DB/$CUST/$SITE/settings/ $S3_DEVICE_DL/$CUST/$SITE/settings/
+			return_check "Settings version update for domain $CUST/$SITE failed."
+	
+			SETTINGS_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
+		fi
 	else
 		SETTINGS_UPDATE_STATUS="No Change (v$OVER)"
 	fi
@@ -297,17 +302,22 @@ update_payload_check() {
 
 	if [ "x$P1" != "x0" ] || [ "x$P2" != "x0" ] || [ "x$P3" != "x0" ]; then
 		
-	        NVER=$((OVER + 1))
-	        echo $NVER > $MASTER_DB/$CUST/$SITE/payload/version.cfg
-	       
-		run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
-		return_check "Payload version update for domain $CUST/$SITE failed."
-		
-		if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
-			err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
-	        fi
-
-		PAYLOAD_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
+		if [ ! -z "$KEEP_VERSION" ]; then
+			
+			PAYLOAD_UPDATE_STATUS="Updated (v$OVER)"
+		else
+		        NVER=$((OVER + 1))
+		        echo $NVER > $MASTER_DB/$CUST/$SITE/payload/version.cfg
+		       
+			run s3cmd -v --config $S3_ALL sync --no-preserve --delete-removed $MASTER_DB/$CUST/$SITE/payload/ $S3_DEVICE_DL/$CUST/$SITE/payload/
+			return_check "Payload version update for domain $CUST/$SITE failed."
+			
+			if [ $PAYLOAD_UPDATE_RET -ne 0 ]; then
+				err "Payload update for domain $CUST/$SITE failed (Ret: $PAYLOAD_UPDATE_RET)"
+		        fi
+	
+			PAYLOAD_UPDATE_STATUS="Updated (v$OVER -> v$NVER)"
+		fi
 	else
 		PAYLOAD_UPDATE_STATUS="No Change (v$OVER)"
 	fi
