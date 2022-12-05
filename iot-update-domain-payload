@@ -21,6 +21,7 @@ LOG=$LOGS_DIR/iot-update-domain-payload.log
 ARGC=$#
 ARGV=("$@")
 
+FVERSION=
 VERBOSE=false
 HELP=false
 
@@ -45,6 +46,15 @@ while [ $COUNT -lt $ARGC ]; do
 		VERBOSE=true
 	elif [ "x$STRIP" == "x-h" ]; then
 		HELP=true
+	elif [ "x$STRIP" == "x-f" ]; then
+		COUNT=$((COUNT+1))
+		FVERSION=${ARGV[COUNT]}
+		if [ "x$FVERSION" == "x" ]; then			
+			pl
+			pr "Error: Unknown argument"
+			COUNT=$ARGC
+			HELP=true
+		fi
 	else
 		pl
 		pr "Error: Unknown argument"
@@ -69,6 +79,7 @@ if [ "$HELP" == "true" ]; then
 	pl
 	pn "Help:"
 	pl
+	pn "-f (--force)       Force the version to specific value"
 	pn "-v (--verbose)     Verbose output for operations"
 	pn "-h (--help)        Print this"
 	pl
@@ -176,6 +187,13 @@ while [ $DOMAINS_COUNT -lt $DOMAINS_MAX ] ; do
 		PAYLOAD_UPDATE_STATUS="Updated"
 	fi
 	pg "Done"
+
+	if [ ! -z "$FVERSION" ]; then
+		pnn "- Domain ($DOMAIN_NEXT) payload version (forced) : "
+		echo "$FVERSION" > $MASTER_DB/$CUST/$SITE/payload/version.cfg
+		pg "$FVERSION"
+		PAYLOAD_UPDATE_STATUS="Updated"
+	fi
 
 	pnn "- Domain ($DOMAIN_NEXT) change status : "
 	pg "$PAYLOAD_UPDATE_STATUS"
