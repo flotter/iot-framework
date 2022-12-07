@@ -110,7 +110,7 @@ def mqtt_send_door(state):
 class Flasher(Thread):
     """Flash something."""
 
-    def __init__(self, state_function, lock, delay = 0.5, timeout = 0):
+    def __init__(self, state_function, lock, *, delay = 0.5, timeout = 0, auto = True):
         """Initialize."""
 
         Thread.__init__(self)
@@ -125,8 +125,11 @@ class Flasher(Thread):
         self.running = True
         # Make sure only one pin instance is flashed at a time
         self.lock = lock
+        # Daemonize the thread so it dies with parent
+        self.daemon = True
 
-        self.start()
+        if auto:
+            self.start()
 
     def run(self):
         """Do work."""
@@ -169,7 +172,7 @@ class Flasher(Thread):
 class MQTTEvent(Thread):
     """Flash something."""
 
-    def __init__(self, state_get, state_function, lock, delay = 1):
+    def __init__(self, state_get, state_function, lock, *, delay = 1, auto = True):
         """Initialize."""
 
         Thread.__init__(self)
@@ -182,8 +185,11 @@ class MQTTEvent(Thread):
         self.delay = delay
         # Make sure only one event type at a time
         self.lock = lock
+        # Daemonize the thread so it dies with parent
+        self.daemon = True
 
-        self.start()
+        if auto:
+            self.start()
 
     def run(self):
         """Do work."""
@@ -264,8 +270,8 @@ def panic_callback(ch):
 
         MQTTEvent(panic_get, mqtt_send_panic, mqtt_send_panic_lock)
 
-        Flasher(buzzer_set, buzzer_set_lock, 1, 5)
-        Flasher(trigger_set, trigger_set_lock, 1, 5)
+        Flasher(buzzer_set, buzzer_set_lock, delay = 1, timeout = 5)
+        Flasher(trigger_set, trigger_set_lock, delay = 1, timeout = 5)
 
         # Soft debounce
         time.sleep(2)
@@ -290,8 +296,8 @@ def door_callback(ch):
     
         MQTTEvent(door_get, mqtt_send_door, mqtt_send_door_lock)
         
-        Flasher(buzzer_set, buzzer_set_lock, 1, 5)
-        Flasher(trigger_set, trigger_set_lock, 1, 5)
+        Flasher(buzzer_set, buzzer_set_lock, delay = 1, timeout = 5)
+        Flasher(trigger_set, trigger_set_lock, delay = 1, timeout = 5)
 
         # Soft debounce
         time.sleep(2)
@@ -332,17 +338,6 @@ def on_set(state):
     else:
         GPIO.output(BCM_ON, GPIO.LOW)
 
-
-#################################################
-# Cleanup
-#################################################
-
-def exit_handler():
-    print("Exit handler called")
-    GPIO.cleanup()
-
-atexit.register(exit_handler)
-
 #################################################
 # Application Logic
 #################################################
@@ -350,8 +345,14 @@ atexit.register(exit_handler)
 # Setup the pins
 gpio_setup()
 
-# System is On
-on_set(True)
+def exit_handler():
+    print("Exit handler called")
+    GPIO.cleanup()
+
+atexit.register(exit_handler)
+
+# Start flasher
+Flasher(on_set, on_set_lock, delay = 1)
 
 # Arm the inputs
 arm_inputs()
