@@ -3,15 +3,16 @@ Description="Payload Service"
 StartLimitAction=reboot-force
 StartLimitIntervalSec=60
 StartLimitBurst=5
-After=updater.service
+After=updater.service home-iot-enc.mount
 Wants=updater.service
+Requires=home-iot-enc.mount
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/home/iot/payload
-ExecStart=/usr/bin/echo "Payload Start: not installed"
-ExecStopPost=/usr/bin/echo "Payload Stop: not installed"
+ExecStart=/home/iot/payload/payload-start
+ExecStop=/home/iot/payload/payload-stop
 Restart=always
 RestartSec=5
 StandardOutput=journal

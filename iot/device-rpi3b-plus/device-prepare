@@ -207,7 +207,6 @@ run cp $CPWD/device-files/updater /bin/
 run cp $CPWD/device-files/*.service /etc/systemd/system
 
 run systemctl enable bootstrap
-run systemctl enable payload
 run systemctl enable health-logger
 run systemctl enable payload-hw-check
 run systemctl enable update-check

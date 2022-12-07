@@ -53,55 +53,57 @@ device_commission() {
         mkdir -p $CPWD/mnt/enc/update
         run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/live/
         run cp -Rf $MASTER_DB/$CUST/$SITE/payload/* $CPWD/mnt/enc/update/
+        run cp -f $MASTER_DB/$CUST/$SITE/payload/payload.service $CPWD/mnt/root/etc/systemd/system/
         run touch $CPWD/mnt/boot/iot/payload-formatted.flag
         pg "Done"
 	
+        pnn "- Preparing for foreign chroot : "
+
+        mount --bind /dev $CPWD/mnt/root/dev/
+        mount --bind /sys $CPWD/mnt/root/sys/
+        mount --bind /proc $CPWD/mnt/root/proc/
+        mount --bind /dev/pts $CPWD/mnt/root/dev/pts
+        mkdir -p $CPWD/mnt/root/boot/firmware
+        mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
+
+        mkdir -p $CPWD/mnt/root/home/iot/enc
+        mount --bind $CPWD/mnt/enc $CPWD/mnt/root/home/iot/enc
+
+        cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
+
+        pg "Done"
+
+        pn
+        pg "Foreign chroot start"
+        pn
+
+        pnn "- Enable payload service : "
+	chroot $CPWD/mnt/root /usr/bin/systemctl enable payload
+        pg "Done"
+	
 	if [ "x$DEBUG_SHELL" == "xtrue" ]; then
-	
-	        pnn "- Preparing for foreign chroot : "
-	
-	        mount --bind /dev $CPWD/mnt/root/dev/
-	        mount --bind /sys $CPWD/mnt/root/sys/
-	        mount --bind /proc $CPWD/mnt/root/proc/
-	        mount --bind /dev/pts $CPWD/mnt/root/dev/pts
-	        mkdir -p $CPWD/mnt/root/boot/firmware
-	        mount --bind $CPWD/mnt/boot $CPWD/mnt/root/boot/firmware
-	
-	        mkdir -p $CPWD/mnt/root/home/iot/enc
-	        mount --bind $CPWD/mnt/enc $CPWD/mnt/root/home/iot/enc
-	
-	        cp -f /usr/bin/qemu-aarch64-static $CPWD/mnt/root/usr/bin/
-	
-	        pg "Done"
-	
-	        pn
-	        pg "Foreign chroot start"
-	        pn
-	
 	        chroot $CPWD/mnt/root /bin/bash
-	
-	        pn
-	        pg "Foreign chroot end"
-	        pn
-	
-	        pnn "- Cleaning up chroot : "
-	
-	        rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
-	
-	        sync
-	
-	        umount $CPWD/mnt/root/home/iot/enc
-	        rm -rf $CPWD/mnt/root/home/iot/enc
-	        umount $CPWD/mnt/root/boot/firmware
-	        umount $CPWD/mnt/root/dev/pts
-	        umount $CPWD/mnt/root/dev/
-	        umount $CPWD/mnt/root/sys/
-	        umount $CPWD/mnt/root/proc/
-	
-	        pg "Done"
-	
-	
 	fi
+
+        pn
+        pg "Foreign chroot end"
+        pn
+
+        pnn "- Cleaning up chroot : "
+
+        rm -f $CPWD/mnt/root/usr/bin/qemu-aarch64-static
+
+        sync
+
+        umount $CPWD/mnt/root/home/iot/enc
+        rm -rf $CPWD/mnt/root/home/iot/enc
+        umount $CPWD/mnt/root/boot/firmware
+        umount $CPWD/mnt/root/dev/pts
+        umount $CPWD/mnt/root/dev/
+        umount $CPWD/mnt/root/sys/
+        umount $CPWD/mnt/root/proc/
+
+        pg "Done"
 	
 	pnn "- Waiting for depedencies : "
 	sync
