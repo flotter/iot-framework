@@ -81,10 +81,14 @@ update_payload() {
 
 			rsync -acv --delete $ENC_DRIVE/update/ $ENC_DRIVE/live/
 			sync
-		
+
 			# Delete empty directories if files were removed
 			find $ENC_DRIVE/live -type d -empty -delete
 			sync
+
+			# Update the systemd service file
+			cp -f -v $ENC_DRIVE/live/payload.service /etc/systemd/service/
+			systemctl daemon-reload
 		fi
 
 		echo "Payload up to date."

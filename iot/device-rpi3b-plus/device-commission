@@ -116,6 +116,7 @@ device_commission() {
 	rm -d $CPWD/mnt/boot
 	rm -d $CPWD/mnt/root
 	rm -d $CPWD/mnt/enc
+	rm -d $CPWD/mnt
 	pg "Done"
 	
 	pnn "- Waiting for depedencies : "
