@@ -295,7 +295,7 @@ else
 	pl
 	# Shell
 	set +e
-	sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; sudo bash'
+	sshpass -e ssh -t -q -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" $USER@$ENDPOINT_IP 'cd /home/iot/payload; sudo -E bash'
 	set -e
 fi
 pl
