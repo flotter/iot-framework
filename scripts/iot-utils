@@ -169,7 +169,7 @@ common_setup() {
 	fi
 	DELTA=$(($UTC_NOW - $DEB_DONE_UTC))
         if [ $DELTA -gt 86400 ] || [ $DELTA -eq 0 ]; then
-		run sudo apt-get install -y git putty build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ntpdate
+		run sudo apt-get install -y git putty build-essential bison flex p7zip-full squashfs-tools pv bc device-tree-compiler libssl-dev qemu-user-static binfmt-support sshpass lvm2 kpartx uuid-dev ntpdate vim gedit nano
 		run apt-get install -y python3-pip
 		run python3 -m pip install --upgrade pip
 		run python3 -m pip install s3cmd
