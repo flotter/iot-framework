@@ -74,22 +74,7 @@ def mqtt_send_health():
                 "settings_version" : int(utils.settings_version()),
                 "payload_version"  : int(utils.payload_version()),
                 "reboots"          : int(utils.reboots()),
-
-# Task C.1:
-#
-# Include the Raspberry Pi processor temperature in the MQTT health
-# message sent to the dashboard.
-#
-# The JSON data payload is made up of key-value pairs in the form:
-#
-# "key" : value
-#
-# Make the key "bcm_temp" and the value utils.bcm_temp(). The temperature
-# is provided by a helper function you will find in the payload directory
-# under libs/utils.py. The temperature is of type string, so do NOT try
-# to convert it to int().
-
-
+                "bcm_temp"         : utils.bcm_temp(),
             }
         )
     )
@@ -115,25 +100,14 @@ mqtt_send_door_lock = Lock()
 def mqtt_send_door(state):
     """Send door state."""
 
-# Task C.2:
-#
-# Take a look at the mqtt_send_panic() function above and
-# make this function send an MQTT message to report that
-# the door was opened.
-#
-# MQTT messages consist of a message "topic" string, and the
-# message body. The topic has to be a very specific format to
-# allow the server to route the message to the correct domain.
-#
-# Topic format: "iot/<customer-id>/<site-id>/<endpoint-serial>/<event>"
-#
-# Note: Make sure that you change the event type to be "door".
-#
-# Message Body: The body takes a JSON object with a single key-value
-# pair. The key should be "state" and the value an integer value
-# reflecting if the door is open (1) or closed (0).
-#
-# Use the function mqtt.publish(topic, body)
+    mqtt.publish(
+        f"iot/{utils.cust()}/{utils.site()}/{utils.serial()}/door",
+        json.dumps(
+            {
+                "state" : int(state),
+            }
+        )
+    )
 
 
 #################################################
@@ -154,108 +128,23 @@ def gpio_setup():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(BCM_ON , GPIO.OUT)
 
-# Task B.1:
-#
-# Setup the remaining 4 GPIO pins as follows:
-
-# BCM_BUZZER as output (GPIO.OUT)
-# BCM_TRIG as output (GPIO.OUT)
-# BCM_PANIC as input (GPIO.IN) with pull-down (GPIO.PUD_DOWN)
-# BCM_DOOR as input (GPIO.IN) with pull-down (GPIO.PUD_DOWN)
-# 
-# Use the function GPIO.setup(pin, direction, option)
-
-
-# Task B.2:
-#
-# Register a callback function, panic_callback(), for the
-# panic pin (BCM_PANIC) on a rising edge (GPIO.RISING) event
-# (pin goes from 0v to 3.3v)
-#
-# Use the function GPIO.add_event_detect(pin, edge, callback=<function>)
+    GPIO.setup(BCM_BUZZER , GPIO.OUT)
+    GPIO.setup(BCM_TRIG , GPIO.OUT)
+    GPIO.setup(BCM_PANIC , GPIO.IN, GPIO.PUD_DOWN)
+    GPIO.setup(BCM_DOOR , GPIO.IN, GPIO.PUD_DOWN)
     
-
-# Task B.3:
-#
-# Register a callback function, door_callback(), for the
-# panic pin (BCM_DOOR) on a rising edge (GPIO.RISING) event
-# (pin goes from 0v to 3.3v)
-#
-# Use the function GPIO.add_event_detect(pin, edge, callback=<function>)
-
-
-################################################
-
-# Make sure only one Flasher can use this function at a time
-on_set_lock = Lock()
-
-def on_set(state):
-    """Set the On Green LED on or off."""
-
-    if bool(state) == True:
-        GPIO.output(BCM_ON, GPIO.HIGH)
-    else:
-        GPIO.output(BCM_ON, GPIO.LOW)
+    # Call the function panic_callback if the panic pin goes to 3.3v
+    GPIO.add_event_detect(BCM_PANIC, GPIO.RISING, callback=panic_callback)
+    
+    # Call the function door_callback if the door pin goes to 3.3v
+    GPIO.add_event_detect(BCM_DOOR, GPIO.RISING, callback=door_callback)
 
 ################################################
 
 def panic_get():
     """Get panic state."""
 
-# Task B.4:
-#
-# Read the state of the panic pin (BCM_PANIC).
-#
-# Use function GPIO.input(pin)
-
-
-################################################
-
-def door_get():
-    """Get door state."""
-
-# Task B.5:
-#
-# Read the state of the panic pin (BCM_DOOR).
-#
-# Use function GPIO.input(pin)
-
-
-################################################
-
-# Make sure only one Flasher can use this function at a time
-buzzer_set_lock = Lock()
-
-def buzzer_set(state):
-    """Set the buzzer on or off."""
-
-# Task B.6:
-#
-# Set the state of the buzzer pin (BCM_BUZZER).
-# If state is True, set the pin to GPIO.HIGH, else
-# if the state request is False, set the pin to
-# GPIO.LOW.
-#
-# Use the function GPIO.output(pin, state)
-
-
-################################################
-
-# Make sure only one Flasher can use this function at a time
-trigger_set_lock = Lock()
-
-def trigger_set(state):
-    """Set the Triggered Red LED on or off."""
-
-# Task B.7:
-#
-# Set the state of the trigger pin (BCM_TRIG).
-# If state is True, set the pin to GPIO.HIGH, else
-# if the state request is False, set the pin to
-# GPIO.LOW.
-#
-# Use the function GPIO.output(pin, state)
-
+    return bool(GPIO.input(BCM_PANIC))
 
 ################################################
 
@@ -284,6 +173,12 @@ def panic_callback(ch):
         # Release Lock
         panic_debounce.release()
 
+################################################
+
+def door_get():
+    """Get door state."""
+
+    return bool(GPIO.input(BCM_DOOR))
 
 ################################################
 
@@ -312,6 +207,48 @@ def door_callback(ch):
         # Release Lock
         door_debounce.release()
 
+
+################################################
+
+# Make sure only one Flasher can use this function at a time
+buzzer_set_lock = Lock()
+
+def buzzer_set(state):
+    """Set the buzzer on or off."""
+
+    if bool(state) == True:
+        GPIO.output(BCM_BUZZER, GPIO.HIGH)
+    else:
+        GPIO.output(BCM_BUZZER, GPIO.LOW)
+
+
+################################################
+
+# Make sure only one Flasher can use this function at a time
+trigger_set_lock = Lock()
+
+def trigger_set(state):
+    """Set the Triggered Red LED on or off."""
+
+    if bool(state) == True:
+        GPIO.output(BCM_TRIG, GPIO.HIGH)
+    else:
+        GPIO.output(BCM_TRIG, GPIO.LOW)
+
+
+################################################
+
+# Make sure only one Flasher can use this function at a time
+on_set_lock = Lock()
+
+def on_set(state):
+    """Set the On Green LED on or off."""
+
+    if bool(state) == True:
+        GPIO.output(BCM_ON, GPIO.HIGH)
+    else:
+        GPIO.output(BCM_ON, GPIO.LOW)
+
 #################################################
 # Application Logic
 #################################################
@@ -327,16 +264,7 @@ def exit_handler():
 
 atexit.register(exit_handler)
 
-# Task A.1:
-#
-# The command below controls the Green LED on your
-# external circuit. The value of delay controls how
-# long the green LED stays in one state before
-# switching.
-#
-# Change the flash rate to use a delay of 0.1 (5Hz), instead
-# of the current value of 1 (0.5 Hz).
-
+# Start flasher
 background.Flasher(on_set, on_set_lock, delay = 1)
 
 # Setup the MQTT client
